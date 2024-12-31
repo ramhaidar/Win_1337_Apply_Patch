@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 
 namespace Win_1337_Patch
 {
@@ -67,7 +68,8 @@ namespace Win_1337_Patch
                 {
                     Pein = uOriginal.ToString("X8");
                     Pefi = uRecalculated.ToString("X8");
-                    return true;
+                    MessageBox.Show("The patch has already been applied.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return true; // Indicate the patch was already applied
                 }
             }
             else

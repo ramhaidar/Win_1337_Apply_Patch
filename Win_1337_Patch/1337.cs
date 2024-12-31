@@ -179,6 +179,7 @@ namespace Win_1337_Patch
             }
             byte[] bexe = File.ReadAllBytes(exe);
             bool ok = true;
+            bool alreadyApplied = false;
             for (var i = 1; i < lines.Length; i += 1)
             {
                 if (lines[i].Trim() != "")
@@ -190,6 +191,12 @@ namespace Win_1337_Patch
                     byte f = byte.Parse(tmp2[0], System.Globalization.NumberStyles.HexNumber);
                     if (bexe[offsetHex] == byte.Parse(tmp2[0], System.Globalization.NumberStyles.HexNumber))
                         bexe[offsetHex] = byte.Parse(tmp2[1], System.Globalization.NumberStyles.HexNumber);
+                    else if (bexe[offsetHex] == byte.Parse(tmp2[1], System.Globalization.NumberStyles.HexNumber))
+                    {
+                        alreadyApplied = true;
+                        ok = false;
+                        break;
+                    }
                     else
                     {
                         MessageBox.Show("Offset [" + offsetHex.ToString("X") + "] Wrong...\n\nSet 0x" + bexe[offsetHex].ToString("X") + " -> I expected 0x" + byte.Parse(tmp2[0], System.Globalization.NumberStyles.HexNumber).ToString("X"), "Error...", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -214,6 +221,10 @@ namespace Win_1337_Patch
                 File.WriteAllBytes(exe, bexe);
                 SistemaPeCks(exe);
                 MessageBox.Show("File " + Path.GetFileName(exe) + " Patched...", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (alreadyApplied)
+            {
+                MessageBox.Show("The patch has already been applied.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
