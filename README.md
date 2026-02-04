@@ -2,6 +2,8 @@
 
 A professional Windows tool to apply .1337 patch files directly into .exe or .dll files. Features both an intuitive GUI and a powerful command-line interface for automation.
 
+![Screenshot](/docs/screenshots/image.png)
+
 ## Features
 
 ### Core Functionality
