@@ -1,18 +1,19 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
-  <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{97153568-54C0-4295-9ABD-20358B78A5BB}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
-    <RootNamespace>Win_1337_Patch</RootNamespace>
-    <AssemblyName>Win_1337_Patch</AssemblyName>
-    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-    <Deterministic>true</Deterministic>
-    <TargetFrameworkProfile />
-  </PropertyGroup>
+    <PropertyGroup>
+      <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+      <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+      <ProjectGuid>{97153568-54C0-4295-9ABD-20358B78A5BB}</ProjectGuid>
+      <OutputType>WinExe</OutputType>
+      <RootNamespace>Win_1337_Patch</RootNamespace>
+      <AssemblyName>Win_1337_Patch</AssemblyName>
+      <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+      <FileAlignment>512</FileAlignment>
+      <Deterministic>true</Deterministic>
+      <TargetFrameworkProfile />
+      <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugSymbols>true</DebugSymbols>
@@ -40,18 +41,22 @@
   <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Deployment" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xml" />
-  </ItemGroup>
+    <ItemGroup>
+      <Reference Include="System" />
+      <Reference Include="System.Core" />
+      <Reference Include="System.Xml.Linq" />
+      <Reference Include="System.Data.DataSetExtensions" />
+      <Reference Include="Microsoft.CSharp" />
+      <Reference Include="System.Data" />
+      <Reference Include="System.Deployment" />
+      <Reference Include="System.Drawing" />
+      <Reference Include="System.Windows.Forms" />
+      <Reference Include="System.Xml" />
+      <Reference Include="System.Resources.Extensions">
+        <HintPath>$(NuGetPackageRoot)system.resources.extensions\7.0.0\lib\net462\System.Resources.Extensions.dll</HintPath>
+        <Private>true</Private>
+      </Reference>
+    </ItemGroup>
   <ItemGroup>
     <Compile Include="Ellipsis.cs" />
     <Compile Include="1337.cs">
@@ -61,6 +66,8 @@
       <DependentUpon>1337.cs</DependentUpon>
     </Compile>
     <Compile Include="mCheckSum.cs" />
+    <Compile Include="PatchEngine.cs" />
+    <Compile Include="ScheduledPatchManager.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="1337.resx">
@@ -90,6 +97,9 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="vampire.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Resources.Extensions" Version="7.0.0" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
