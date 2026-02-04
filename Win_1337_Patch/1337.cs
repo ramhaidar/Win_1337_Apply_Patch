@@ -3,8 +3,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows.Forms;
-using System.Security.AccessControl;
-using System.Security.Principal;
 
 namespace Win_1337_Patch
 {
@@ -12,9 +10,6 @@ namespace Win_1337_Patch
     {
         private string exe = String.Empty;
         private string f1337 = String.Empty;
-
-        [System.Runtime.InteropServices.DllImport("Imagehlp.dll")]
-        private static extern bool ImageRemoveCertificate(IntPtr handle, int index);
 
         public Form1()
         {
@@ -154,99 +149,25 @@ namespace Win_1337_Patch
 
         private void DFoX_Patch()
         {
+            if (string.IsNullOrWhiteSpace(f1337) || string.IsNullOrWhiteSpace(exe))
+            {
+                MessageBox.Show("Select a .1337 File and the Exe/Dll to Patch...", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
             if (!File.Exists(exe) || !File.Exists(f1337))
             {
                 MessageBox.Show("Files are no Longer Present...", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
-            if (cchangeOwnership.Checked)
-            {
-                try
-                {
-                    UnlockDLL(exe);
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show($"An error occurred while changing ownership: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    return;
-                }
-            }
+            var request = new PatchRequest(f1337, exe, cfileoffsett.Checked, controlloBackup.Checked, cchangeOwnership.Checked);
+            var outcome = PatchEngine.ApplyPatch(request);
 
-            string[] lines = File.ReadAllLines(f1337);
-            if (!check_Symbol(lines[0]))
-                return;
-            string targetFileNameOriginal = lines[0].Substring(1).Trim();
-            string targetFileNameLower = targetFileNameOriginal.ToLower();
-            string selectedFileNameLower = Path.GetFileName(exe).ToLower();
-            if (targetFileNameLower != selectedFileNameLower)
-            {
-                MessageBox.Show("The .1337 File is not valid for selected exe/dll...\n\nExpected: \"" + Path.GetFileName(targetFileNameOriginal) + "\"\nSelected: \"" + Path.GetFileName(exe) + "\"\n\nNote: Filenames must match exactly (case-insensitive on Windows)", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-            byte[] bexe = File.ReadAllBytes(exe);
-            bool ok = true;
-            for (var i = 1; i < lines.Length; i += 1)
-            {
-                if (lines[i].Trim() != "")
-                {
-                    string[] tmp = lines[i].Split(':');
-                    int offsetHex = int.Parse(tmp[0], System.Globalization.NumberStyles.HexNumber) - (cfileoffsett.Checked ? 0xC00 : 0);
-                    string[] tmp2 = tmp[1].Replace("->", ":").Split(':');
-                    byte e = bexe[offsetHex];
-                    byte f = byte.Parse(tmp2[0], System.Globalization.NumberStyles.HexNumber);
-                    if (bexe[offsetHex] == byte.Parse(tmp2[0], System.Globalization.NumberStyles.HexNumber))
-                        bexe[offsetHex] = byte.Parse(tmp2[1], System.Globalization.NumberStyles.HexNumber);
-                    else
-                    {
-                        MessageBox.Show("Offset [" + offsetHex.ToString("X") + "] Wrong...\n\nSet 0x" + bexe[offsetHex].ToString("X") + " -> I expected 0x" + byte.Parse(tmp2[0], System.Globalization.NumberStyles.HexNumber).ToString("X"), "Error...", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                        ok = false;
-                        break;
-                    }
-                }
-            }
-            if (ok)
-            {
-                if (controlloBackup.Checked == true)
-                {
-                    string dateSuffix = DateTime.Now.ToString("yyyy-MM-dd_hh-mm-ss-tt");
-                    string backupFileName = $"{exe}.{dateSuffix}.BAK";
-
-                    if (File.Exists(backupFileName))
-                        File.Delete(backupFileName);
-                    File.Copy(exe, backupFileName);
-                }
-                if (File.Exists(exe))
-                    File.Delete(exe);
-                File.WriteAllBytes(exe, bexe);
-                SistemaPeCks(exe);
-                MessageBox.Show("File " + Path.GetFileName(exe) + " Patched...", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-        }
-
-        private void SistemaPeCks(string file)
-        {
-            try
-            {
-                using (FileStream fs = new FileStream(file, FileMode.Open, FileAccess.ReadWrite))
-                {
-                    ImageRemoveCertificate(fs.SafeFileHandle.DangerousGetHandle(), 0);
-                }
-
-                checked
-                {
-                    mCheckSum PE = new mCheckSum();
-                    PE.FixCheckSum(file);
-                }
-            }
-            catch (OverflowException ex)
-            {
-                MessageBox.Show($"Overflow error occurred while processing PE checksum: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while processing PE checksum: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            if (outcome.Success)
+                MessageBox.Show(outcome.Message, "Info...", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            else
+                MessageBox.Show(outcome.Message, "Info...", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
         private void DFoX_Load(object sender, EventArgs e)
@@ -395,47 +316,5 @@ namespace Win_1337_Patch
             }
         }
 
-        private void UnlockDLL(string filePath)
-        {
-            if (!File.Exists(filePath))
-            {
-                MessageBox.Show("The specified file does not exist.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
-            }
-
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo("cmd.exe")
-                {
-                    UseShellExecute = false,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                };
-
-                using (Process process = new Process())
-                {
-                    process.StartInfo = psi;
-                    process.Start();
-
-                    using (StreamWriter sw = process.StandardInput)
-                    {
-                        if (sw.BaseStream.CanWrite)
-                        {
-                            sw.WriteLine($"takeown /F \"{filePath}\"");
-                            sw.WriteLine($"icacls \"{filePath}\" /grant Administrators:F");
-                        }
-                    }
-
-                    process.WaitForExit();
-                }
-
-                MessageBox.Show($"Ownership and permissions of {filePath} have been successfully changed.", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while changing ownership: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
     }
 }
