@@ -1,4 +1,4 @@
-# Win_1337_Apply_Patch v2.2
+# Win_1337_Apply_Patch v2.3.0
 
 A professional Windows tool to apply .1337 patch files directly into .exe or .dll files. Features both an intuitive GUI and a powerful command-line interface for automation.
 
@@ -11,6 +11,7 @@ A professional Windows tool to apply .1337 patch files directly into .exe or .dl
 - **Binary byte-level patching** with validation and safety checks
 - **Automatic PE checksum recalculation** after patching
 - **Certificate removal** from PE files for modified binaries
+- **Automatic Target Detection** - Auto-selects known system targets (e.g., `nvEncodeAPI.dll`) when matching patch is loaded
 
 ### User Interface
 - **Modern GUI** with drag-and-drop support
@@ -20,7 +21,7 @@ A professional Windows tool to apply .1337 patch files directly into .exe or .dl
 
 ### Automation & CLI
 - **Full command-line interface** for unattended/scripted patching
-- **Scheduled patching** - schedule patches to run on next system boot
+- **Scheduled patching** - schedule patches to run on next system boot (useful for locked files)
 - **Exit codes** for integration with batch scripts and CI/CD pipelines
 
 ### Safety Features
@@ -49,6 +50,9 @@ cd Win_1337_Apply_Patch
 start Win_1337_Patch.sln
 
 # Build the solution (Ctrl+Shift+B)
+
+# Or build using dotnet CLI
+dotnet build Win_1337_Patch.sln --configuration Release
 ```
 
 ## Usage
@@ -57,7 +61,7 @@ start Win_1337_Patch.sln
 
 1. Launch `Win_1337_Apply_Patch.exe`
 2. Select a `.1337` patch file (or drag and drop it onto the window)
-3. Select the target `.exe` or `.dll` file to patch
+3. Select the target `.exe` or `.dll` file to patch (often auto-detected)
 4. Configure options:
    - **Fix File Offset**: Apply 0xC00 offset adjustment
    - **Create Backup**: Save a timestamped backup before patching
@@ -73,11 +77,11 @@ Win_1337_Apply_Patch.exe -patch <1337-file> <target-file> [options]
 #### Options
 | Option | Description |
 |--------|-------------|
-| `-fileoffset`, `--fileoffset` | Apply 0xC00 file offset adjustment |
-| `-backup`, `--backup` | Create timestamped backup before patching |
-| `-takeownership` | Take ownership of protected files (requires admin) |
-| `-schedule`, `--schedule` | Schedule patch to run on next boot |
-| `-help`, `--help`, `/?` | Show help text |
+| `-fileoffset`, `--fileoffset`, `-offset`, `--offset` | Apply 0xC00 file offset adjustment |
+| `-backup`, `--backup`, `-b` | Create timestamped backup before patching |
+| `-takeownership`, `--takeownership`, `-take-ownership` | Take ownership of protected files (requires admin) |
+| `-schedule`, `--schedule`, `-runonce`, `-run-on-reboot` | Schedule patch to run on next boot |
+| `-help`, `--help`, `/?`, `-h` | Show help text |
 
 #### Examples
 
@@ -134,11 +138,13 @@ Win_1337_Apply_Patch/
 ├── Win_1337_Patch/              # Main application
 │   ├── PatchEngine.cs           # Core patching logic
 │   ├── ScheduledPatchManager.cs # Boot-time scheduling
+│   ├── PatchTargetResolver.cs   # Auto-target detection
 │   ├── 1337.cs                  # GUI form
 │   └── Program.cs               # Entry point & CLI
 ├── Win_1337_Patch.Tests/        # Unit tests
 │   ├── PatchEngineTests.cs
-│   └── ConsolePatchParserTests.cs
+│   ├── ConsolePatchParserTests.cs
+│   └── PatchTargetResolverTests.cs
 └── Win_1337_Patch.sln           # Solution file
 ```
 
@@ -152,11 +158,14 @@ The core patching engine (`PatchEngine.cs`) provides:
 - PE checksum normalization
 - File ownership management
 
+#### PatchTargetResolver
+Automatically resolves target file paths for well-known patches (e.g., detecting `System32\nvEncodeAPI.dll` when `nvencodeapi.1337` is loaded).
+
 #### ScheduledPatchManager
 Handles scheduling patches to run on next boot via Windows RunOnce registry entries.
 
 #### ConsolePatchParser
-Parses command-line arguments with support for various option formats.
+Parses command-line arguments with support for various option formats (implemented in `Program.cs`).
 
 ## Testing
 
@@ -167,7 +176,10 @@ The project includes comprehensive unit tests:
 Test > Run All Tests
 
 # Or use vstest.console
-vstest.console.exe Win_1337_Patch.Tests.dll
+vtest.console.exe Win_1337_Patch.Tests.dll
+
+# Or use dotnet CLI
+dotnet test Win_1337_Patch.Tests/Win_1337_Patch.Tests.csproj
 ```
 
 ### Test Coverage
@@ -176,6 +188,7 @@ vstest.console.exe Win_1337_Patch.Tests.dll
 - Target filename validation
 - Byte mismatch detection
 - CLI argument parsing
+- Auto-target resolution
 
 ## Contributing
 
@@ -195,7 +208,18 @@ Contributions are welcome! Please:
 
 ## Changelog
 
-### v2.2.0 (Latest)
+### v2.3.0 (Latest)
+- **Added**: Automatic patch target resolution via `PatchTargetResolver`, letting GUI and CLI flows auto-select `nvencodeapi.1337`/`nvencodeapi64.1337` published under `System32`/`SysWOW64` without manual path hunting.
+- **Added**: `-patch`/`--patch` CLI switch plus supporting console parser work so automated scripts can trigger patching without the GUI and share the same PatchEngine logic.
+- **Added**: Reboot scheduling through `ScheduledPatchManager`, enabling patches to be staged for the next boot to handle locked DLLs and remote-admin scenarios.
+- **Added**: Dedicated `Select EXE` button with `TryAutoFillExecutable`/`SetExecutableTarget` helpers so the GUI mirrors auto-detected targets while still allowing manual overrides.
+- **Improved**: Startup settings no longer retain `urlexe` or `url1337`, and executable/patch fields reset on load to guarantee every session starts from a predictable state.
+- **Added**: GPLv3 license file plus refreshed project metadata and configuration to make the fork’s legal posture explicit.
+- **Documented**: Comprehensive README rewrite that now fully covers the GUI, CLI, architecture, automation story, and contributor/workflow guidance introduced in this release.
+- **Refined**: PatchEngine now exposes consistent non-nullable `Succeeded` helpers, centralizes CLI/GUI patch logic, and removes nullable noise so diagnostics and safety checks behave uniformly.
+- **Added**: MSTest project covering PatchEngine and ConsolePatchParser scenarios (addressing backups, validation failures, byte mismatches, and scheduling) to keep 100% coverage as the core logic evolves.
+
+### v2.2.0
 - **Added**: Command-line interface for automation
 - **Added**: Scheduled patching for next boot
 - **Added**: Unit test project with comprehensive coverage
@@ -217,7 +241,7 @@ Contributions are welcome! Please:
 
 ## License
 
-This project is open source. See the repository for license details.
+This project is open source under the GPLv3 License. See the `LICENSE` file for details.
 
 ## Credits
 
