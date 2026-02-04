@@ -57,18 +57,19 @@
         <Private>true</Private>
       </Reference>
     </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Ellipsis.cs" />
-    <Compile Include="1337.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="1337.Designer.cs">
-      <DependentUpon>1337.cs</DependentUpon>
-    </Compile>
-    <Compile Include="mCheckSum.cs" />
-    <Compile Include="PatchEngine.cs" />
-    <Compile Include="ScheduledPatchManager.cs" />
-    <Compile Include="Program.cs" />
+    <ItemGroup>
+      <Compile Include="Ellipsis.cs" />
+      <Compile Include="1337.cs">
+        <SubType>Form</SubType>
+      </Compile>
+      <Compile Include="1337.Designer.cs">
+        <DependentUpon>1337.cs</DependentUpon>
+      </Compile>
+      <Compile Include="mCheckSum.cs" />
+      <Compile Include="PatchEngine.cs" />
+      <Compile Include="PatchTargetResolver.cs" />
+      <Compile Include="ScheduledPatchManager.cs" />
+      <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <EmbeddedResource Include="1337.resx">
       <DependentUpon>1337.cs</DependentUpon>
