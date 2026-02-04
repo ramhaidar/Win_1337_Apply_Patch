@@ -16,8 +16,8 @@ namespace Win_1337_Patch
             InitializeComponent();
             var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             string ver = "v" + version.Major + "." + version.Minor;
-            this.Text = "Win 1337 Apply Patch File " + ver;
-            linkdfox.Text = ver + " By DeltaFoX";
+            this.Text = "Win 1337 Apply Patch File " + ver + " Fork By @ramhaidar";
+            linkdfox.Text = ver + " Fork Version";
         }
 
         private void set()
@@ -26,19 +26,18 @@ namespace Win_1337_Patch
             {
                 t1337.Text = Ellipsis.Compact(f1337, t1337, EllipsisFormat.Path);
                 toolTip1.SetToolTip(t1337, f1337);
-                Properties.Settings.Default["url1337"] = f1337;
-                Properties.Settings.Default.Save();
 
                 string[] lines = File.ReadAllLines(f1337);
                 if (!check_Symbol(lines[0]))
                     return;
 
+                if (TryAutoFillExecutable())
+                    return;
+
                 // Preserve original case for file dialog and filter (fixes case sensitivity issues on Windows 10)
                 // Reference: https://github.com/Deltafox79/Win_1337_Apply_Patch/issues/4
                 string unfOriginal = lines[0].Substring(1).Trim();
-                string unfLower = unfOriginal.ToLower();
                 string nf = Path.GetFileName(unfOriginal);
-                string nfLower = Path.GetFileName(unfLower);
                 string ext = Path.GetExtension(unfOriginal);
                 OpenFileDialog apriDialogoFile1 = new OpenFileDialog
                 {
@@ -50,11 +49,7 @@ namespace Win_1337_Patch
 
                 if (apriDialogoFile1.ShowDialog() == DialogResult.OK)
                 {
-                    exe = apriDialogoFile1.FileName;
-                    texe.Text = Ellipsis.Compact(Path.GetFileName(exe), texe, EllipsisFormat.Path);
-                    toolTip1.SetToolTip(texe, exe);
-                    Properties.Settings.Default["urlexe"] = exe;
-                    Properties.Settings.Default.Save();
+                    SetExecutableTarget(apriDialogoFile1.FileName);
                 }
                 else
                 {
@@ -68,6 +63,26 @@ namespace Win_1337_Patch
             {
                 MessageBox.Show($"An error occurred while setting up the file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private bool TryAutoFillExecutable()
+        {
+            if (PatchTargetResolver.TryGetAutoTarget(f1337, out string suggestedPath) && File.Exists(suggestedPath))
+            {
+                SetExecutableTarget(suggestedPath);
+                return true;
+            }
+            return false;
+        }
+
+        private void SetExecutableTarget(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return;
+
+            exe = path;
+            texe.Text = Ellipsis.Compact(path, texe, EllipsisFormat.Path);
+            toolTip1.SetToolTip(texe, path);
         }
 
         private void t1337_DragDrop(object sender, DragEventArgs e)
@@ -87,24 +102,64 @@ namespace Win_1337_Patch
         {
             try
             {
-                string url1337 = Properties.Settings.Default["url1337"].ToString();
-                OpenFileDialog apriDialogoFile1 = new OpenFileDialog
+                string initialDirectory = Directory.GetCurrentDirectory();
+                if (!string.IsNullOrWhiteSpace(f1337))
+                {
+                    string previousFolder = Path.GetDirectoryName(f1337);
+                    if (!string.IsNullOrWhiteSpace(previousFolder) && Directory.Exists(previousFolder))
+                        initialDirectory = previousFolder;
+                }
+
+                using (OpenFileDialog apriDialogoFile1 = new OpenFileDialog
                 {
                     Filter = "File 1337|*.*",
                     FilterIndex = 0,
                     Title = "Select the .1337 File...",
-                    InitialDirectory = url1337 != "" ? url1337 : Directory.GetCurrentDirectory() + "\\",
+                    InitialDirectory = initialDirectory,
                     RestoreDirectory = true
-                };
-                if (apriDialogoFile1.ShowDialog() == DialogResult.OK)
+                })
                 {
-                    f1337 = apriDialogoFile1.FileName;
-                    set();
+                    if (apriDialogoFile1.ShowDialog() == DialogResult.OK)
+                    {
+                        f1337 = apriDialogoFile1.FileName;
+                        set();
+                    }
                 }
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"An error occurred while selecting the .1337 file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void btnSelectExe_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                string initialDirectory = Directory.GetCurrentDirectory();
+                if (!string.IsNullOrWhiteSpace(exe))
+                {
+                    string savedDirectory = Path.GetDirectoryName(exe);
+                    if (!string.IsNullOrWhiteSpace(savedDirectory) && Directory.Exists(savedDirectory))
+                        initialDirectory = savedDirectory;
+                }
+
+                using (OpenFileDialog apriDialogoFile = new OpenFileDialog
+                {
+                    Filter = "Executable or DLL|*.exe;*.dll|All Files|*.*",
+                    FilterIndex = 0,
+                    Title = "Select the Exe/Dll file to patch...",
+                    InitialDirectory = initialDirectory,
+                    RestoreDirectory = true
+                })
+                {
+                    if (apriDialogoFile.ShowDialog() == DialogResult.OK)
+                        SetExecutableTarget(apriDialogoFile.FileName);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"An error occurred while selecting the Exe/Dll file: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -174,29 +229,16 @@ namespace Win_1337_Patch
         {
             try
             {
-                string urlexe = Properties.Settings.Default["urlexe"].ToString().Trim();
-                string url1337 = Properties.Settings.Default["url1337"].ToString().Trim();
                 cfileoffsett.Checked = (bool)Properties.Settings.Default["fixoffset"];
                 controlloBackup.Checked = (bool)Properties.Settings.Default["backup"];
                 cchangeOwnership.Checked = (bool)Properties.Settings.Default["changeOwnership"];
 
-                if (urlexe != "")
-                {
-                    texe.Text = Ellipsis.Compact(Path.GetFileName(urlexe), texe, EllipsisFormat.Path);
-                    toolTip1.SetToolTip(texe, urlexe);
-                    exe = urlexe;
-                }
-                else
-                    texe.Text = "Select the Exe/Dll to Patch...";
-
-                if (url1337 != "" && urlexe != "")
-                {
-                    t1337.Text = Ellipsis.Compact(url1337, t1337, EllipsisFormat.Path);
-                    toolTip1.SetToolTip(t1337, url1337);
-                    f1337 = url1337;
-                }
-                else
-                    t1337.Text = "Select a .1337 File...";
+                exe = String.Empty;
+                f1337 = String.Empty;
+                texe.Text = "Select the Exe/Dll to Patch...";
+                toolTip1.SetToolTip(texe, texe.Text);
+                t1337.Text = "Select a .1337 File...";
+                toolTip1.SetToolTip(t1337, t1337.Text);
             }
             catch (Exception ex)
             {
@@ -247,61 +289,15 @@ namespace Win_1337_Patch
         {
             try
             {
-                _apriUrl(@"https://github.com/Deltafox79/Win_1337_Apply_Patch");
+                Process.Start(new ProcessStartInfo(@"https://github.com/ramhaidar/Win_1337_Apply_Patch")
+                {
+                    UseShellExecute = true
+                });
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"An error occurred while opening the URL: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
-        }
-
-        private void _apriUrl(string url)
-        {
-            try
-            {
-                string browserPath = ottieniLaPathBrowser();
-                if (browserPath == string.Empty)
-                    browserPath = "iexplore";
-                Process process = new Process
-                {
-                    StartInfo = new ProcessStartInfo(browserPath)
-                    {
-                        Arguments = url
-                    }
-                };
-                process.Start();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while opening the browser: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-        }
-
-        private static string ottieniLaPathBrowser()
-        {
-            string name = String.Empty;
-            RegistryKey regKey = null;
-            try
-            {
-                var regDefault = Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\.htm\\UserChoice", false);
-                var stringDefault = regDefault.GetValue("ProgId");
-
-                regKey = Registry.ClassesRoot.OpenSubKey(stringDefault + "\\shell\\open\\command", false);
-                name = regKey.GetValue(null).ToString().ToLower().Replace("" + (char)34, "");
-
-                if (!name.EndsWith("exe"))
-                    name = name.Substring(0, name.LastIndexOf(".exe") + 4);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while retrieving browser path: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
-            finally
-            {
-                if (regKey != null)
-                    regKey.Close();
-            }
-            return name;
         }
 
         private void t1337_DoubleClick(object sender, EventArgs e)

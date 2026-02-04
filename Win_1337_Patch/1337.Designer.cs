@@ -35,6 +35,7 @@
             this.label6 = new System.Windows.Forms.Label();
             this.texe = new System.Windows.Forms.TextBox();
             this.btnSelect1337 = new System.Windows.Forms.Button();
+            this.btnSelectExe = new System.Windows.Forms.Button();
             this.linkdfox = new System.Windows.Forms.LinkLabel();
             this.Patch = new System.Windows.Forms.Button();
             this.controlloBackup = new System.Windows.Forms.CheckBox();
@@ -89,10 +90,10 @@
             this.texe.Location = new System.Drawing.Point(90, 31);
             this.texe.Name = "texe";
             this.texe.ReadOnly = true;
-            this.texe.Size = new System.Drawing.Size(370, 20);
+            this.texe.Size = new System.Drawing.Size(343, 20);
             this.texe.TabIndex = 14;
             this.texe.TabStop = false;
-            this.texe.Text = "Name of Exe/Dll to Patch...";
+            this.texe.Text = "Select the Exe/Dll to Patch...";
             this.texe.TextAlign = System.Windows.Forms.HorizontalAlignment.Center;
             // 
             // btnSelect1337
@@ -108,6 +109,20 @@
             this.btnSelect1337.Text = "...";
             this.btnSelect1337.UseVisualStyleBackColor = true;
             this.btnSelect1337.Click += new System.EventHandler(this.btnSelect1337_Click);
+            // 
+            // btnSelectExe
+            // 
+            this.btnSelectExe.CausesValidation = false;
+            this.btnSelectExe.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F);
+            this.btnSelectExe.ForeColor = System.Drawing.Color.DarkRed;
+            this.btnSelectExe.Location = new System.Drawing.Point(436, 28);
+            this.btnSelectExe.Margin = new System.Windows.Forms.Padding(0);
+            this.btnSelectExe.Name = "btnSelectExe";
+            this.btnSelectExe.Size = new System.Drawing.Size(24, 23);
+            this.btnSelectExe.TabIndex = 20;
+            this.btnSelectExe.Text = "...";
+            this.btnSelectExe.UseVisualStyleBackColor = true;
+            this.btnSelectExe.Click += new System.EventHandler(this.btnSelectExe_Click);
             // 
             // linkdfox
             // 
@@ -197,6 +212,7 @@
             this.Controls.Add(this.t1337);
             this.Controls.Add(this.label6);
             this.Controls.Add(this.texe);
+            this.Controls.Add(this.btnSelectExe);
             this.Controls.Add(this.cchangeOwnership);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MaximizeBox = false;
@@ -217,6 +233,7 @@
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.TextBox texe;
         private System.Windows.Forms.Button btnSelect1337;
+        private System.Windows.Forms.Button btnSelectExe;
         private System.Windows.Forms.LinkLabel linkdfox;
         private System.Windows.Forms.Button Patch;
         private System.Windows.Forms.CheckBox controlloBackup;
