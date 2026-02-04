@@ -62,11 +62,21 @@ namespace Win_1337_Patch
                 return;
             }
 
-            var patchDescription = $"Patch mode: {Path.GetFileName(parser.PatchFilePath!)} -> {parser.TargetFilePath}";
+            var patchFilePath = parser.PatchFilePath;
+            var targetFilePath = parser.TargetFilePath;
+
+            if (string.IsNullOrWhiteSpace(patchFilePath) || string.IsNullOrWhiteSpace(targetFilePath))
+            {
+                ShowUsage("Internal error: missing patch or target path.");
+                Environment.ExitCode = 1;
+                return;
+            }
+
+            var patchDescription = $"Patch mode: {Path.GetFileName(patchFilePath)} -> {targetFilePath}";
 
             if (parser.ScheduleOnNextBoot && !parser.ScheduledRun)
             {
-                var descriptor = new PatchScheduleDescriptor(parser.PatchFilePath!, parser.TargetFilePath!, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
+                var descriptor = new PatchScheduleDescriptor(patchFilePath, targetFilePath, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
                 var scheduleResult = ScheduledPatchManager.Schedule(descriptor, LogToConsole);
                 Console.WriteLine(scheduleResult.Message);
                 Environment.ExitCode = scheduleResult.Success ? 0 : 1;
@@ -83,7 +93,7 @@ namespace Win_1337_Patch
             Console.WriteLine(patchDescription);
             Console.WriteLine("Applying patch...");
 
-            var request = new PatchRequest(parser.PatchFilePath!, parser.TargetFilePath!, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
+            var request = new PatchRequest(patchFilePath, targetFilePath, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
             var result = PatchEngine.ApplyPatch(request, LogToConsole);
 
             Console.WriteLine(result.Message);
@@ -100,7 +110,7 @@ namespace Win_1337_Patch
             consoleReady = true;
         }
 
-        private static void ShowUsage(string? errorMessage = null)
+        private static void ShowUsage(string errorMessage = null)
         {
             if (!string.IsNullOrWhiteSpace(errorMessage))
                 Console.WriteLine($"Error: {errorMessage}");
@@ -221,9 +231,9 @@ namespace Win_1337_Patch
 
             public bool IsValid { get; private set; }
             public bool RequestHelp { get; private set; }
-            public string? ErrorMessage { get; private set; }
-            public string? PatchFilePath { get; private set; }
-            public string? TargetFilePath { get; private set; }
+            public string ErrorMessage { get; private set; }
+            public string PatchFilePath { get; private set; }
+            public string TargetFilePath { get; private set; }
             public bool FixOffset { get; private set; }
             public bool CreateBackup { get; private set; }
             public bool TakeOwnership { get; private set; }

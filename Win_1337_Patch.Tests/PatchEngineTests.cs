@@ -7,7 +7,7 @@ namespace Win_1337_Patch.Tests
     [TestClass]
     public sealed class PatchEngineTests
     {
-        private string? tempDirectory;
+        private string tempDirectory;
 
         [TestInitialize]
         public void Initialize()
@@ -26,8 +26,8 @@ namespace Win_1337_Patch.Tests
         [TestMethod]
         public void ApplyPatchCreatesBackupAndUpdatesBytes()
         {
-            var targetFile = Path.Combine(tempDirectory!, "dummy.exe");
-            var patchFile = Path.Combine(tempDirectory!, "dummy.1337");
+            var targetFile = Path.Combine(tempDirectory, "dummy.exe");
+            var patchFile = Path.Combine(tempDirectory, "dummy.1337");
             var inputBytes = new byte[] { 0x90, 0xAA, 0x90 };
 
             File.WriteAllBytes(targetFile, inputBytes);
@@ -40,14 +40,14 @@ namespace Win_1337_Patch.Tests
             Assert.AreEqual(0xBB, File.ReadAllBytes(targetFile)[1]);
             Assert.IsFalse(string.IsNullOrEmpty(outcome.BackupPath));
             Assert.IsTrue(File.Exists(outcome.BackupPath));
-            CollectionAssert.AreEqual(inputBytes, File.ReadAllBytes(outcome.BackupPath!));
+            CollectionAssert.AreEqual(inputBytes, File.ReadAllBytes(outcome.BackupPath));
         }
 
         [TestMethod]
         public void ApplyPatchFailsWhenHeaderInvalid()
         {
-            var targetFile = Path.Combine(tempDirectory!, "dummy.exe");
-            var patchFile = Path.Combine(tempDirectory!, "dummy.1337");
+            var targetFile = Path.Combine(tempDirectory, "dummy.exe");
+            var patchFile = Path.Combine(tempDirectory, "dummy.1337");
 
             File.WriteAllBytes(targetFile, new byte[] { 0x00 });
             File.WriteAllLines(patchFile, new[] { "dummy.exe", "0:00->01" });
@@ -62,8 +62,8 @@ namespace Win_1337_Patch.Tests
         [TestMethod]
         public void ApplyPatchFailsWhenTargetNameMismatch()
         {
-            var targetFile = Path.Combine(tempDirectory!, "dummy.exe");
-            var patchFile = Path.Combine(tempDirectory!, "dummy.1337");
+            var targetFile = Path.Combine(tempDirectory, "dummy.exe");
+            var patchFile = Path.Combine(tempDirectory, "dummy.1337");
 
             File.WriteAllBytes(targetFile, new byte[] { 0x00 });
             File.WriteAllLines(patchFile, new[] { ">other.exe", "0:00->01" });
@@ -78,8 +78,8 @@ namespace Win_1337_Patch.Tests
         [TestMethod]
         public void ApplyPatchFailsWhenByteDoesNotMatch()
         {
-            var targetFile = Path.Combine(tempDirectory!, "dummy.exe");
-            var patchFile = Path.Combine(tempDirectory!, "dummy.1337");
+            var targetFile = Path.Combine(tempDirectory, "dummy.exe");
+            var patchFile = Path.Combine(tempDirectory, "dummy.1337");
 
             File.WriteAllBytes(targetFile, new byte[] { 0x00, 0x00 });
             File.WriteAllLines(patchFile, new[] { ">dummy.exe", "1:FF->AB" });

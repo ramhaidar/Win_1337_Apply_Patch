@@ -32,7 +32,7 @@ namespace Win_1337_Patch
     /// </summary>
     internal sealed class ScheduledPatchResult
     {
-        private ScheduledPatchResult(bool success, string message, string? entryName, string? commandLine, Exception? error)
+        private ScheduledPatchResult(bool success, string message, string entryName, string commandLine, Exception error)
         {
             Success = success;
             Message = message;
@@ -43,16 +43,16 @@ namespace Win_1337_Patch
 
         public bool Success { get; }
         public string Message { get; }
-        public string? EntryName { get; }
-        public string? CommandLine { get; }
-        public Exception? Error { get; }
+        public string EntryName { get; }
+        public string CommandLine { get; }
+        public Exception Error { get; }
 
         public static ScheduledPatchResult SuccessResult(string message, string entryName, string commandLine)
         {
             return new ScheduledPatchResult(true, message, entryName, commandLine, null);
         }
 
-        public static ScheduledPatchResult Failure(string message, Exception? error = null)
+        public static ScheduledPatchResult Failure(string message, Exception error = null)
         {
             return new ScheduledPatchResult(false, message, null, null, error);
         }
@@ -68,7 +68,7 @@ namespace Win_1337_Patch
         /// <summary>
         /// Attempts to create a RunOnce value that will execute the patch later.
         /// </summary>
-        public static ScheduledPatchResult Schedule(PatchScheduleDescriptor descriptor, Action<string>? log)
+        public static ScheduledPatchResult Schedule(PatchScheduleDescriptor descriptor, Action<string> log)
         {
             if (descriptor == null)
                 throw new ArgumentNullException(nameof(descriptor));

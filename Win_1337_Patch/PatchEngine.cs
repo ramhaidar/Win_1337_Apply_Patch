@@ -38,7 +38,7 @@ namespace Win_1337_Patch
 
     public sealed class PatchOutcome
     {
-        private PatchOutcome(bool success, string message, string? backupPath, Exception? error)
+        private PatchOutcome(bool success, string message, string backupPath, Exception error)
         {
             Success = success;
             Message = message;
@@ -48,15 +48,15 @@ namespace Win_1337_Patch
 
         public bool Success { get; }
         public string Message { get; }
-        public string? BackupPath { get; }
-        public Exception? Error { get; }
+        public string BackupPath { get; }
+        public Exception Error { get; }
 
-        public static PatchOutcome SuccessOutcome(string message, string? backupPath = null)
+        public static PatchOutcome SuccessOutcome(string message, string backupPath = null)
         {
             return new PatchOutcome(true, message, backupPath, null);
         }
 
-        public static PatchOutcome Failure(string message, Exception? error = null)
+        public static PatchOutcome Failure(string message, Exception error = null)
         {
             return new PatchOutcome(false, message, null, error);
         }
@@ -66,7 +66,7 @@ namespace Win_1337_Patch
     {
         private const int FileOffsetAdjustment = 0xC00;
 
-        public static PatchOutcome ApplyPatch(PatchRequest request, Action<string>? log = null)
+        public static PatchOutcome ApplyPatch(PatchRequest request, Action<string> log = null)
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
@@ -152,7 +152,7 @@ namespace Win_1337_Patch
                     buffer[adjustedOffset] = replacementByte;
                 }
 
-                string? backupPath = null;
+                string backupPath = null;
                 if (request.CreateBackup)
                 {
                     backupPath = CreateBackup(targetFile, log);
@@ -186,7 +186,7 @@ namespace Win_1337_Patch
             }
         }
 
-        private static string? CreateBackup(string targetFile, Action<string>? log)
+        private static string CreateBackup(string targetFile, Action<string> log)
         {
             try
             {
@@ -205,7 +205,7 @@ namespace Win_1337_Patch
             }
         }
 
-        private static FileNormalizationResult NormalizeFile(string filePath, Action<string>? log)
+        private static FileNormalizationResult NormalizeFile(string filePath, Action<string> log)
         {
             try
             {
@@ -222,7 +222,7 @@ namespace Win_1337_Patch
                 }
 
                 log?.Invoke("PE checksum normalized.");
-                return FileNormalizationResult.Success("PE checksum normalized.");
+                    return FileNormalizationResult.Succeeded("PE checksum normalized.");
             }
             catch (OverflowException ex)
             {
@@ -238,7 +238,7 @@ namespace Win_1337_Patch
             }
         }
 
-        private static FileOwnershipResult GrantOwnership(string filePath, Action<string>? log)
+        private static FileOwnershipResult GrantOwnership(string filePath, Action<string> log)
         {
             try
             {
@@ -267,7 +267,7 @@ namespace Win_1337_Patch
 
                 var logMessage = $"Ownership updated for '{filePath}'.";
                 log?.Invoke(logMessage);
-                return FileOwnershipResult.Success(logMessage);
+                return FileOwnershipResult.Succeeded(logMessage);
             }
             catch (Exception ex)
             {
@@ -282,7 +282,7 @@ namespace Win_1337_Patch
 
         private readonly struct FileNormalizationResult
         {
-            public FileNormalizationResult(bool success, string message, Exception? error)
+            public FileNormalizationResult(bool success, string message, Exception error)
             {
                 Success = success;
                 Message = message;
@@ -291,14 +291,14 @@ namespace Win_1337_Patch
 
             public bool Success { get; }
             public string Message { get; }
-            public Exception? Error { get; }
+            public Exception Error { get; }
 
-            public static FileNormalizationResult Success(string message)
+            public static FileNormalizationResult Succeeded(string message)
             {
                 return new FileNormalizationResult(true, message, null);
             }
 
-            public static FileNormalizationResult Failure(string message, Exception? error = null)
+            public static FileNormalizationResult Failure(string message, Exception error = null)
             {
                 return new FileNormalizationResult(false, message, error);
             }
@@ -306,7 +306,7 @@ namespace Win_1337_Patch
 
         private readonly struct FileOwnershipResult
         {
-            public FileOwnershipResult(bool success, string message, Exception? error)
+            public FileOwnershipResult(bool success, string message, Exception error)
             {
                 Success = success;
                 Message = message;
@@ -315,14 +315,14 @@ namespace Win_1337_Patch
 
             public bool Success { get; }
             public string Message { get; }
-            public Exception? Error { get; }
+            public Exception Error { get; }
 
-            public static FileOwnershipResult Success(string message)
+            public static FileOwnershipResult Succeeded(string message)
             {
                 return new FileOwnershipResult(true, message, null);
             }
 
-            public static FileOwnershipResult Failure(string message, Exception? error)
+            public static FileOwnershipResult Failure(string message, Exception error)
             {
                 return new FileOwnershipResult(false, message, error);
             }
