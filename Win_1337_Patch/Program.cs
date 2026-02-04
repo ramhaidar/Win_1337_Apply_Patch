@@ -62,8 +62,25 @@ namespace Win_1337_Patch
                 return;
             }
 
+            var patchDescription = $"Patch mode: {Path.GetFileName(parser.PatchFilePath!)} -> {parser.TargetFilePath}";
+
+            if (parser.ScheduleOnNextBoot && !parser.ScheduledRun)
+            {
+                var descriptor = new PatchScheduleDescriptor(parser.PatchFilePath!, parser.TargetFilePath!, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
+                var scheduleResult = ScheduledPatchManager.Schedule(descriptor, LogToConsole);
+                Console.WriteLine(scheduleResult.Message);
+                Environment.ExitCode = scheduleResult.Success ? 0 : 1;
+                return;
+            }
+
+            if (parser.ScheduledRun)
+            {
+                Console.WriteLine();
+                Console.WriteLine("Executing previously scheduled patch...");
+            }
+
             Console.WriteLine();
-            Console.WriteLine($"Patch mode: {Path.GetFileName(parser.PatchFilePath)} -> {parser.TargetFilePath}");
+            Console.WriteLine(patchDescription);
             Console.WriteLine("Applying patch...");
 
             var request = new PatchRequest(parser.PatchFilePath!, parser.TargetFilePath!, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
@@ -96,6 +113,8 @@ namespace Win_1337_Patch
             Console.WriteLine("  -fileoffset, --fileoffset   Apply the same 0xC00 offset adjustment used by the GUI.");
             Console.WriteLine("  -backup, --backup           Keep a timestamped backup of the target before patching.");
             Console.WriteLine("  -takeownership              Run takeown/icacls so the patch can overwrite protected files.");
+            Console.WriteLine("  -schedule, --schedule, -runonce, --run-once, -run-on-reboot, --run-on-reboot   Schedule the patch to run after the next reboot.");
+            Console.WriteLine("  -scheduledrun, --scheduled-run   Internally generated when a scheduled patch executes; you normally do not use this flag directly.");
             Console.WriteLine("  -help, --help, /?           Show this help text.");
             Console.WriteLine();
         }
@@ -122,11 +141,13 @@ namespace Win_1337_Patch
             }
         }
 
-        private sealed class ConsolePatchParser
+        internal sealed class ConsolePatchParser
         {
             private static readonly string[] OffsetSwitches = { "-fileoffset", "--fileoffset", "-offset", "--offset" };
             private static readonly string[] BackupSwitches = { "-backup", "--backup", "-b" };
             private static readonly string[] OwnershipSwitches = { "-takeownership", "--takeownership", "--take-ownership", "-take-ownership" };
+            private static readonly string[] ScheduleSwitches = { "-schedule", "--schedule", "-runonce", "--run-once", "-run-on-reboot", "--run-on-reboot" };
+            private static readonly string[] ScheduledRunSwitches = { "-scheduledrun", "--scheduled-run" };
 
             public ConsolePatchParser(string[] args)
             {
@@ -158,6 +179,18 @@ namespace Win_1337_Patch
                     if (OwnershipSwitches.Contains(normalized))
                     {
                         TakeOwnership = true;
+                        continue;
+                    }
+
+                    if (ScheduleSwitches.Contains(normalized))
+                    {
+                        ScheduleOnNextBoot = true;
+                        continue;
+                    }
+
+                    if (ScheduledRunSwitches.Contains(normalized))
+                    {
+                        ScheduledRun = true;
                         continue;
                     }
 
@@ -194,6 +227,8 @@ namespace Win_1337_Patch
             public bool FixOffset { get; private set; }
             public bool CreateBackup { get; private set; }
             public bool TakeOwnership { get; private set; }
+            public bool ScheduleOnNextBoot { get; private set; }
+            public bool ScheduledRun { get; private set; }
         }
 
         private static class NativeMethods
