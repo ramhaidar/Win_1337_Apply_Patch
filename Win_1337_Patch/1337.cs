@@ -1,4 +1,4 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -38,9 +38,13 @@ namespace Win_1337_Patch
                 if (!check_Symbol(lines[0]))
                     return;
 
-                string unf = lines[0].Substring(1).ToLower().Trim();
-                string nf = Path.GetFileName(unf);
-                string ext = Path.GetExtension(unf);
+                // Preserve original case for file dialog and filter (fixes case sensitivity issues on Windows 10)
+                // Reference: https://github.com/Deltafox79/Win_1337_Apply_Patch/issues/4
+                string unfOriginal = lines[0].Substring(1).Trim();
+                string unfLower = unfOriginal.ToLower();
+                string nf = Path.GetFileName(unfOriginal);
+                string nfLower = Path.GetFileName(unfLower);
+                string ext = Path.GetExtension(unfOriginal);
                 OpenFileDialog apriDialogoFile1 = new OpenFileDialog
                 {
                     FileName = nf,
@@ -172,9 +176,12 @@ namespace Win_1337_Patch
             string[] lines = File.ReadAllLines(f1337);
             if (!check_Symbol(lines[0]))
                 return;
-            if (lines[0].Substring(1).ToLower().Trim() != Path.GetFileName(exe).ToLower().Trim())
+            string targetFileNameOriginal = lines[0].Substring(1).Trim();
+            string targetFileNameLower = targetFileNameOriginal.ToLower();
+            string selectedFileNameLower = Path.GetFileName(exe).ToLower();
+            if (targetFileNameLower != selectedFileNameLower)
             {
-                MessageBox.Show("The .1337 File is not valid for selected exe/dll...\n\n(\"" + lines[0].Substring(1).ToLower() + "\" but you have selected \"" + Path.GetFileName(exe).ToLower() + "\")", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("The .1337 File is not valid for selected exe/dll...\n\nExpected: \"" + Path.GetFileName(targetFileNameOriginal) + "\"\nSelected: \"" + Path.GetFileName(exe) + "\"\n\nNote: Filenames must match exactly (case-insensitive on Windows)", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
             byte[] bexe = File.ReadAllBytes(exe);
