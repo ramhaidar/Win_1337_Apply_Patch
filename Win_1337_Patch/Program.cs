@@ -158,6 +158,7 @@ namespace Win_1337_Patch
             private static readonly string[] OwnershipSwitches = { "-takeownership", "--takeownership", "--take-ownership", "-take-ownership" };
             private static readonly string[] ScheduleSwitches = { "-schedule", "--schedule", "-runonce", "--run-once", "-run-on-reboot", "--run-on-reboot" };
             private static readonly string[] ScheduledRunSwitches = { "-scheduledrun", "--scheduled-run" };
+            private static readonly string[] PatchSwitches = { "-patch", "--patch" };
 
             public ConsolePatchParser(string[] args)
             {
@@ -173,6 +174,9 @@ namespace Win_1337_Patch
                         RequestHelp = true;
                         return;
                     }
+
+                    if (PatchSwitches.Contains(normalized))
+                        continue;
 
                     if (OffsetSwitches.Contains(normalized))
                     {
