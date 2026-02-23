@@ -40,6 +40,9 @@ A professional Windows tool to apply .1337 patch files directly into .exe or .dl
 ### Download
 Download the latest release from the [Releases](https://github.com/ramhaidar/Win_1337_Apply_Patch/releases) page.
 
+### .1337 Patch Files
+You can get `.1337` patch files from sources like the [nvidia-patch repo](https://github.com/keylase/nvidia-patch/tree/master/win) (example); other projects may also provide `.1337` patch files.
+
 ### Build from Source
 ```bash
 # Clone the repository
