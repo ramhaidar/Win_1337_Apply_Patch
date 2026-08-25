@@ -1,265 +1,280 @@
-# Win_1337_Apply_Patch v2.3.0
+# Win_1337_Apply_Patch
 
-A professional Windows tool to apply .1337 patch files directly into .exe or .dll files. Features both an intuitive GUI and a powerful command-line interface for automation.
+Windows desktop utility for applying text-based `.1337` byte patches to `.exe` and `.dll` files. It provides a Windows Forms GUI for interactive use and a command-line mode for scripted patching.
 
-![Screenshot](/docs/screenshots/image.png)
+> **Warning:** Patching executable files changes them in place and can make them unusable. Work on a copy where possible, enable backups before patching, and verify that the patch file belongs to the exact target binary. The application requests administrator privileges and should be used only with files you are authorized to modify.
+
+![Win_1337_Apply_Patch screenshot](docs/screenshots/image.png)
+
+## Overview
+
+A `.1337` file identifies an expected target filename and one or more byte replacements. Win_1337_Apply_Patch validates the target name and expected bytes before writing the modified binary. Unless checksum normalization is skipped internally by a test request, the patch engine removes the PE certificate and recalculates the PE checksum after writing.
+
+The project is a fork associated with [@ramhaidar](https://github.com/ramhaidar/Win_1337_Apply_Patch) and retains attribution to the original author, DeltaFoX (DeFconX).
 
 ## Features
 
-### Core Functionality
-- **Apply .1337 patches** to Windows executables (.exe) and libraries (.dll)
-- **Binary byte-level patching** with validation and safety checks
-- **Automatic PE checksum recalculation** after patching
-- **Certificate removal** from PE files for modified binaries
-- **Automatic Target Detection** - Auto-selects known system targets (e.g., `nvEncodeAPI.dll`) when matching patch is loaded
+- Apply `.1337` patches to Windows `.exe` and `.dll` files.
+- Validate the patch header, target filename, offsets, hexadecimal bytes, and expected byte values before modifying the target.
+- Create timestamped `.BAK` backups before patching.
+- Optionally apply the `0xC00` file-offset adjustment used by the GUI and CLI.
+- Remove PE certificates and recalculate the PE checksum after a successful write.
+- Use a Windows Forms GUI with file dialogs, drag-and-drop patch selection, tooltips, and persisted checkbox settings.
+- Automatically suggest known NVIDIA targets for `nvencodeapi.1337` and `nvencodeapi64.1337` when the expected files exist.
+- Patch from the command line with success/error exit codes.
+- Optionally update ownership and permissions for protected files through `takeown` and `icacls`.
+- Schedule a patch through the current user's Windows `RunOnce` registry entry for execution after the next reboot.
 
-### User Interface
-- **Modern GUI** with drag-and-drop support
-- **Settings persistence** - remembers your last used files and preferences
-- **Case-preserving file dialogs** - properly handles filename case sensitivity
-- **Visual feedback** with detailed tooltips and status messages
+## Tech Stack
 
-### Automation & CLI
-- **Full command-line interface** for unattended/scripted patching
-- **Scheduled patching** - schedule patches to run on next system boot (useful for locked files)
-- **Exit codes** for integration with batch scripts and CI/CD pipelines
+- C# Windows Forms application.
+- .NET Framework 4.8 (`net48`).
+- Classic MSBuild-style application project: `Win_1337_Patch/Win_1337_Patch.csproj`.
+- MSTest test project targeting .NET Framework 4.8.
+- NuGet `PackageReference` dependencies, including `System.Resources.Extensions`, `System.Memory`, `System.Buffers`, `System.Numerics.Vectors`, and `System.Runtime.CompilerServices.Unsafe`.
+- PE operations use `Imagehlp.dll`; protected-file ownership uses Windows `takeown` and `icacls` commands.
 
-### Safety Features
-- **Automatic backups** - timestamped .BAK files before patching
-- **File ownership management** - uses `takeown` and `icacls` for protected files
-- **Byte validation** - verifies expected bytes before patching
-- **File offset adjustment** - optional 0xC00 offset fix for specific use cases
+## Repository Structure
 
-## Installation
-
-### Requirements
-- Windows 7 or later
-- .NET Framework 4.5 or higher
-- Administrator privileges (for taking ownership of protected files)
-
-### Download
-Download the latest release from the [Releases](https://github.com/ramhaidar/Win_1337_Apply_Patch/releases) page.
-
-### .1337 Patch Files
-You can get `.1337` patch files from sources like the [nvidia-patch repo](https://github.com/keylase/nvidia-patch/tree/master/win) (example); other projects may also provide `.1337` patch files.
-
-### Build from Source
-```bash
-# Clone the repository
-git clone https://github.com/ramhaidar/Win_1337_Apply_Patch.git
-
-# Open the solution in Visual Studio
-cd Win_1337_Apply_Patch
-start Win_1337_Patch.sln
-
-# Build the solution (Ctrl+Shift+B)
-
-# Or build using dotnet CLI
-dotnet build Win_1337_Patch.sln --configuration Release
+```text
+Win_1337_Apply_Patch/
+├── Win_1337_Apply_Patch.sln       # Application and test solution
+├── Win_1337_Patch/
+│   ├── 1337.cs                    # Windows Forms UI
+│   ├── PatchEngine.cs              # Validation, byte patching, backup, PE normalization
+│   ├── PatchTargetResolver.cs      # Known automatic target resolution
+│   ├── Program.cs                  # GUI entry point and CLI parser/runner
+│   ├── ScheduledPatchManager.cs    # Windows RunOnce scheduling
+│   ├── mCheckSum.cs                # PE checksum calculation
+│   ├── app.manifest               # Requests administrator execution
+│   ├── app.config                  # .NET Framework startup/settings configuration
+│   └── Properties/                # Assembly metadata, resources, and user settings
+├── Win_1337_Patch.Tests/
+│   ├── PatchEngineTests.cs
+│   ├── ConsolePatchParserTests.cs
+│   ├── PatchTargetResolverTests.cs
+│   └── Win_1337_Patch.Tests.csproj
+├── docs/screenshots/image.png      # GUI screenshot
+├── LICENSE                          # GNU GPLv3 text
+└── README.md
 ```
+
+## Prerequisites
+
+### Running the application
+
+- Windows.
+- .NET Framework 4.8, as required by the application and test projects.
+- Administrator privileges. The application manifest requests `requireAdministrator`, including for normal GUI startup.
+- A `.1337` patch file and the matching target `.exe` or `.dll`.
+
+### Building and testing
+
+- Visual Studio with .NET desktop development tools, **or** a compatible MSBuild/.NET SDK toolchain that can build .NET Framework 4.8 projects.
+- Access to restore the NuGet `PackageReference` dependencies.
+- A Windows environment for the Windows Forms and Windows API portions of the application.
+
+## Setup
+
+1. Clone the repository and enter its directory:
+
+   ```powershell
+   git clone https://github.com/ramhaidar/Win_1337_Apply_Patch.git
+   Set-Location Win_1337_Apply_Patch
+   ```
+
+2. Restore dependencies:
+
+   ```powershell
+   dotnet restore .\Win_1337_Apply_Patch.sln
+   ```
+
+3. Build the solution in Release configuration:
+
+   ```powershell
+   dotnet build .\Win_1337_Apply_Patch.sln --configuration Release
+   ```
+
+   Alternatively, open `Win_1337_Apply_Patch.sln` in Visual Studio and build the `Release | Any CPU` solution configuration.
+
+## Configuration
+
+The application has no required environment variables or external service configuration.
+
+The following user-scoped settings are defined in `Win_1337_Patch/Properties/Settings.settings` and default to `True`:
+
+| Setting | Effect |
+|---|---|
+| `fixoffset` | Enables the `0xC00` file-offset adjustment by default. |
+| `backup` | Enables timestamped target backups by default. |
+| `changeOwnership` | Enables the ownership/permission option by default. |
+
+GUI settings are persisted through the normal .NET user-settings mechanism. No secrets are stored in the repository. Do not commit target binaries, private patch files, or generated build output.
 
 ## Usage
 
-### GUI Mode
+### GUI
 
-1. Launch `Win_1337_Apply_Patch.exe`
-2. Select a `.1337` patch file (or drag and drop it onto the window)
-3. Select the target `.exe` or `.dll` file to patch (often auto-detected)
-4. Configure options:
-   - **Fix File Offset**: Apply 0xC00 offset adjustment
-   - **Create Backup**: Save a timestamped backup before patching
-   - **Change Ownership**: Take ownership of protected system files
-5. Click **Patch** to apply
+1. Launch the built `Win_1337_Patch.exe` as an administrator.
+2. Select a `.1337` file, or drag it onto the patch-file area.
+3. Select the target `.exe` or `.dll`. The application may auto-select a known NVIDIA target; otherwise use **Select EXE** to choose the file manually.
+4. Review the options:
+   - **Fix File Offset**: subtract `0xC00` from each patch offset before applying it.
+   - **Create Backup**: create a timestamped `<target>.<timestamp>.BAK` copy before writing.
+   - **Change Ownership**: run `takeown` and `icacls` for a protected target.
+5. Click **Patch** and review the result message.
 
-### Command Line Interface
+### Command line
 
-```batch
-Win_1337_Apply_Patch.exe -patch <1337-file> <target-file> [options]
+The executable supports patch mode with this form:
+
+```text
+Win_1337_Patch.exe -patch <1337-file> <target-file> [options]
 ```
+
+The executable is built as a Windows GUI application, so command-line mode allocates a console for output. The process returns exit code `0` on success and `1` on validation, scheduling, or patching failure.
 
 #### Options
+
 | Option | Description |
-|--------|-------------|
-| `-fileoffset`, `--fileoffset`, `-offset`, `--offset` | Apply 0xC00 file offset adjustment |
-| `-backup`, `--backup`, `-b` | Create timestamped backup before patching |
-| `-takeownership`, `--takeownership`, `-take-ownership` | Take ownership of protected files (requires admin) |
-| `-schedule`, `--schedule`, `-runonce`, `-run-on-reboot` | Schedule patch to run on next boot |
-| `-help`, `--help`, `/?`, `-h` | Show help text |
+|---|---|
+| `-patch`, `--patch` | Select command-line patch mode. |
+| `-fileoffset`, `--fileoffset`, `-offset`, `--offset` | Apply the `0xC00` offset adjustment. |
+| `-backup`, `--backup`, `-b` | Create a timestamped backup before patching. |
+| `-takeownership`, `--takeownership`, `-take-ownership`, `--take-ownership` | Run `takeown` and `icacls` for the target. Requires administrator privileges. |
+| `-schedule`, `--schedule`, `-runonce`, `--run-once`, `-run-on-reboot`, `--run-on-reboot` | Store the patch command in the current user's `RunOnce` registry key for the next boot. |
+| `-help`, `--help`, `-h`, `/?`, `/help` | Display usage information. |
 
-#### Examples
+Examples:
 
-**Basic patching:**
-```batch
-Win_1337_Apply_Patch.exe -patch patch.1337 target.exe
+```powershell
+# Apply a patch
+.\Win_1337_Patch.exe -patch .\patch.1337 .\target.dll
+
+# Apply a patch and keep a backup
+.\Win_1337_Patch.exe -patch .\patch.1337 .\target.dll -backup
+
+# Apply a patch with the 0xC00 adjustment
+.\Win_1337_Patch.exe -patch .\patch.1337 .\target.dll -fileoffset
+
+# Patch a protected Windows file and keep a backup
+.\Win_1337_Patch.exe -patch .\patch.1337 C:\Windows\System32\target.dll -takeownership -backup
+
+# Schedule the patch for the next reboot
+.\Win_1337_Patch.exe -patch .\patch.1337 .\target.dll -schedule -backup
 ```
 
-**Patch with backup and offset fix:**
-```batch
-Win_1337_Apply_Patch.exe -patch patch.1337 target.exe -backup -fileoffset
-```
+The `-scheduledrun` / `--scheduled-run` switch is an internal marker added to commands created by the scheduler. It is not normally needed for manual invocation.
 
-**Patch protected system file:**
-```batch
-Win_1337_Apply_Patch.exe -patch patch.1337 C:\Windows\System32\target.dll -takeownership -backup
-```
+### Automatic target resolution
 
-**Schedule patch for next boot:**
-```batch
-Win_1337_Apply_Patch.exe -patch patch.1337 target.exe -schedule -backup
-```
+The GUI resolves these patch filenames, when the candidate target exists:
 
-### Exit Codes
-| Code | Meaning |
-|------|---------|
-| 0 | Success |
-| 1 | Error (check console output for details) |
+| Patch file | Suggested target |
+|---|---|
+| `nvencodeapi.1337` | `%WINDIR%\SysWOW64\nvEncodeAPI.dll` |
+| `nvencodeapi64.1337` | `%WINDIR%\System32\nvEncodeAPI64.dll` |
 
-## .1337 File Format
+Automatic resolution is limited to these names. Other patch files require manual target selection.
 
-The .1337 patch file format is a simple text-based format:
+## `.1337` File Format
 
-```
+The patch engine expects a text file whose first line starts with `>` and whose remaining non-empty lines contain hexadecimal byte replacements:
+
+```text
 >target.exe
-<offset>:<expected_byte>-><replacement_byte>
-```
-
-**Example:**
-```
->notepad.exe
 1A3F:90->EB
 1A40:00->90
 ```
 
-- Line 1: `>` followed by the expected target filename
-- Subsequent lines: `offset:expected->replacement` in hexadecimal
+- The header is `>` followed by the expected target filename. The comparison uses the filename, not the full path, and is case-insensitive.
+- Each patch entry is `offset:expected->replacement`.
+- Offsets and bytes are hexadecimal.
+- The expected byte must match the target at the computed offset; otherwise the patch fails before the target is written.
+- With **Fix File Offset** enabled, the engine subtracts `0xC00` from every declared offset.
+- Blank lines after the header are ignored.
 
 ## Architecture
 
-### Project Structure
-```
-Win_1337_Apply_Patch/
-├── Win_1337_Patch/              # Main application
-│   ├── PatchEngine.cs           # Core patching logic
-│   ├── ScheduledPatchManager.cs # Boot-time scheduling
-│   ├── PatchTargetResolver.cs   # Auto-target detection
-│   ├── 1337.cs                  # GUI form
-│   └── Program.cs               # Entry point & CLI
-├── Win_1337_Patch.Tests/        # Unit tests
-│   ├── PatchEngineTests.cs
-│   ├── ConsolePatchParserTests.cs
-│   └── PatchTargetResolverTests.cs
-└── Win_1337_Patch.sln           # Solution file
-```
+- **`PatchEngine`** is shared by the GUI and CLI. It resolves paths, validates files and patch entries, checks expected bytes, optionally creates a backup, writes the modified bytes, removes the PE certificate, and recalculates the checksum.
+- **`Program`** chooses CLI mode when `-patch`/`--patch` is present; otherwise it starts the Windows Forms application. `ConsolePatchParser` handles CLI switches and positional paths.
+- **`PatchTargetResolver`** contains the known NVIDIA filename-to-target mappings used by the GUI.
+- **`ScheduledPatchManager`** validates the paths and writes a generated command to `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce`. The command runs the application with `-scheduledrun` after the next login/reboot cycle.
+- **`mCheckSum`** performs PE checksum recalculation after patching.
 
-### Key Components
+## Common Commands
 
-#### PatchEngine
-The core patching engine (`PatchEngine.cs`) provides:
-- Validation of patch files and target binaries
-- Byte-level patching with safety checks
-- Backup creation
-- PE checksum normalization
-- File ownership management
+Run these from the repository root in PowerShell:
 
-#### PatchTargetResolver
-Automatically resolves target file paths for well-known patches (e.g., detecting `System32\nvEncodeAPI.dll` when `nvencodeapi.1337` is loaded).
+| Task | Command | Status |
+|---|---|---|
+| Restore | `dotnet restore .\Win_1337_Apply_Patch.sln` | Supported by the solution's PackageReference projects |
+| Build Debug | `dotnet build .\Win_1337_Apply_Patch.sln --configuration Debug` | Supported |
+| Build Release | `dotnet build .\Win_1337_Apply_Patch.sln --configuration Release` | Supported |
+| Run all tests | `dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj` | Supported |
+| Run focused tests | `dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj --filter "FullyQualifiedName~PatchEngineTests"` | Supported by the MSTest test runner |
+| Lint | — | No lint command/configuration was found in the repository |
+| Format | — | No formatter command/configuration was found in the repository |
+| Typecheck | — | No separate typecheck command was found; compilation is the available C# check |
 
-#### ScheduledPatchManager
-Handles scheduling patches to run on next boot via Windows RunOnce registry entries.
-
-#### ConsolePatchParser
-Parses command-line arguments with support for various option formats (implemented in `Program.cs`).
+Visual Studio users can run the full suite through **Test > Run All Tests**.
 
 ## Testing
 
-The project includes comprehensive unit tests:
+Tests are in `Win_1337_Patch.Tests` and use MSTest (`Microsoft.NET.Test.Sdk`, `MSTest.TestAdapter`, and `MSTest.TestFramework`). Current test classes cover:
 
-```bash
-# Run tests in Visual Studio
-Test > Run All Tests
+- Patch application, backup creation, header validation, target-name validation, and expected-byte mismatch handling (`PatchEngineTests`).
+- CLI schedule and scheduled-run flag parsing, plus scheduled command-line construction (`ConsolePatchParserTests` and `ScheduledPatchManagerTests`).
+- Known and unknown automatic target resolution (`PatchTargetResolverTests`).
 
-# Or use vstest.console
-vtest.console.exe Win_1337_Patch.Tests.dll
+Tests use temporary directories for patch-engine file operations. Run the test project on Windows with .NET Framework 4.8 and restored NuGet packages.
 
-# Or use dotnet CLI
-dotnet test Win_1337_Patch.Tests/Win_1337_Patch.Tests.csproj
-```
+## Development Notes
 
-### Test Coverage
-- Patch application with backups
-- Invalid header detection
-- Target filename validation
-- Byte mismatch detection
-- CLI argument parsing
-- Auto-target resolution
+- The application targets `AnyCPU` and uses the `Debug` and `Release` configurations defined in the solution.
+- The application manifest requests administrator execution and disables the assumption that the process can run as a normal unelevated desktop process.
+- Patch files are validated against the current target bytes. Do not reuse a patch against a different binary revision without confirming its expected bytes.
+- Backups are created only when the backup option is enabled. A backup failure prevents the patch from proceeding; if no backup was requested, the target is written without a backup copy.
+- The ownership option changes Windows file ownership/permissions and should be treated as a privileged operation.
+- A scheduled patch writes a `RunOnce` value under the current user's registry hive. Inspect or remove that entry through normal Windows registry administration if a scheduled operation must be cancelled.
+- There are no repository-defined migrations, seed steps, code-generation steps, CI workflows, or automated release scripts.
+
+## Deployment
+
+No deployment pipeline, installer project, container configuration, or release automation was found in this repository. The project produces a Windows executable through the `Release` build configuration. Distribution details for compiled binaries are not defined by the repository; build from source or use a release artifact from the project's [Releases page](https://github.com/ramhaidar/Win_1337_Apply_Patch/releases) when available.
+
+## Troubleshooting
+
+### The patch is rejected as invalid
+
+Confirm that the first line is a `>` header and that the filename after `>` matches the target filename. The comparison ignores case but does not ignore a different filename.
+
+### The expected byte does not match
+
+The patch is for a different binary revision, the target was already modified, or the offset mode is wrong. Restore a known-good backup and verify whether the patch requires **Fix File Offset** before trying again.
+
+### A protected file cannot be changed
+
+Run the application elevated, confirm that the target is not locked by another process, and use **Change Ownership** / `-takeownership` only when appropriate. That option invokes Windows `takeown` and `icacls`; it does not bypass every lock or security policy.
+
+### A scheduled patch does not run
+
+Scheduling uses the current user's `HKCU` `RunOnce` entry and runs only after the next Windows startup/login flow. Confirm that the source patch and target paths still exist and that the generated command can start the application with administrator privileges.
+
+### The build cannot find .NET Framework 4.8 or NuGet packages
+
+Install the .NET Framework 4.8 developer/targeting pack and the Visual Studio/.NET build tools required for classic .NET Framework projects, then restore the solution packages before rebuilding.
 
 ## Contributing
 
-Contributions are welcome! Please:
+1. Create a focused branch for your change.
+2. Keep changes limited to the requested behavior and preserve the existing classic .NET Framework project structure.
+3. Add or update MSTest coverage for patch validation, CLI parsing, target resolution, or scheduling changes.
+4. Run the solution build and the relevant test project before opening a pull request.
+5. Do not include target binaries, private patch files, backups, `bin`/`obj` output, or user-specific settings in commits.
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Development Guidelines
-- Follow existing code style
-- Add unit tests for new features
-- Update documentation for API changes
-- Ensure all tests pass before submitting
-
-## Changelog
-
-### v2.3.0 (Latest)
-- **Added**: Automatic patch target resolution via `PatchTargetResolver`, letting GUI and CLI flows auto-select `nvencodeapi.1337`/`nvencodeapi64.1337` published under `System32`/`SysWOW64` without manual path hunting.
-- **Added**: `-patch`/`--patch` CLI switch plus supporting console parser work so automated scripts can trigger patching without the GUI and share the same PatchEngine logic.
-- **Added**: Reboot scheduling through `ScheduledPatchManager`, enabling patches to be staged for the next boot to handle locked DLLs and remote-admin scenarios.
-- **Added**: Dedicated `Select EXE` button with `TryAutoFillExecutable`/`SetExecutableTarget` helpers so the GUI mirrors auto-detected targets while still allowing manual overrides.
-- **Improved**: Startup settings no longer retain `urlexe` or `url1337`, and executable/patch fields reset on load to guarantee every session starts from a predictable state.
-- **Added**: GPLv3 license file plus refreshed project metadata and configuration to make the fork’s legal posture explicit.
-- **Documented**: Comprehensive README rewrite that now fully covers the GUI, CLI, architecture, automation story, and contributor/workflow guidance introduced in this release.
-- **Refined**: PatchEngine now exposes consistent non-nullable `Succeeded` helpers, centralizes CLI/GUI patch logic, and removes nullable noise so diagnostics and safety checks behave uniformly.
-- **Added**: MSTest project covering PatchEngine and ConsolePatchParser scenarios (addressing backups, validation failures, byte mismatches, and scheduling) to keep 100% coverage as the core logic evolves.
-
-### v2.2.0
-- **Added**: Command-line interface for automation
-- **Added**: Scheduled patching for next boot
-- **Added**: Unit test project with comprehensive coverage
-- **Added**: File ownership management for protected files
-- **Added**: Automatic backup creation with timestamps
-- **Refactored**: Core patching logic moved to `PatchEngine` class
-- **Fixed**: Case sensitivity issues in file dialogs
-- **Improved**: Error handling and user feedback
-
-### v2.1.0
-- **Added**: File offset fix option (0xC00 adjustment)
-- **Added**: Settings persistence
-- **Improved**: UI with drag-and-drop support
-
-### v2.0.0
-- **Added**: PE checksum recalculation
-- **Added**: Certificate removal
-- **Initial**: GUI implementation
+No separate `CONTRIBUTING.md` was found. For issues and pull requests, use the repository's [GitHub project](https://github.com/ramhaidar/Win_1337_Apply_Patch).
 
 ## License
 
-This project is open source under the GPLv3 License. See the `LICENSE` file for details.
-
-## Credits
-
-- **Maintainer**: [@ramhaidar](https://github.com/ramhaidar)
-- **Fork Repository**: https://github.com/ramhaidar/Win_1337_Apply_Patch
-- **Original Author**: DeltaFoX (DeFconX)
-- **Copyright**: © 2026
-- **OriginalRepository**: https://github.com/Deltafox79/Win_1337_Apply_Patch
-
-## Support
-
-For issues, feature requests, or questions:
-- Open an issue on [GitHub](https://github.com/ramhaidar/Win_1337_Apply_Patch/issues)
-- Check existing issues before creating new ones
-
----
-
-**Warning**: Patching executable files can cause them to malfunction. Always create backups before patching and use at your own risk.
+This project is licensed under the [GNU General Public License v3.0](LICENSE). The repository also contains attribution to the original author, DeltaFoX (DeFconX).
