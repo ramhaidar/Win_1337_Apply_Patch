@@ -70,6 +70,7 @@ bin/**/*.dll
 **/bin
 **/obj
 **/TempPE
+**/TestResults/
 
 # Rider specific files
 .idea/
