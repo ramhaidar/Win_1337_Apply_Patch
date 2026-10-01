@@ -4,6 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using System.Xml.Linq;
+using System.Threading.Tasks;
+using System.Threading;
+using System.Diagnostics;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Win_1337_Patch.Tests
@@ -25,7 +28,7 @@ namespace Win_1337_Patch.Tests
         }
 
         [TestMethod]
-        public void SettingsDefaultsRemainTrue()
+        public void SettingsDefaultsRequireExplicitOwnership()
         {
             var settings = Win_1337_Patch.Properties.Settings.Default;
 
@@ -44,7 +47,8 @@ namespace Win_1337_Patch.Tests
                     $"Setting '{property.Name}' must remain user-scoped.");
                 Assert.IsInstanceOfType(property.DefaultValue, typeof(string),
                     $"Setting '{property.Name}' default must be the serialized attribute value.");
-                Assert.AreEqual("True", (string)property.DefaultValue, $"Setting '{property.Name}' must default to True.");
+                Assert.AreEqual(property.Name == "changeOwnership" ? "False" : "True", (string)property.DefaultValue,
+                    $"Setting '{property.Name}' must use the safe default.");
             }
         }
 
@@ -87,13 +91,15 @@ namespace Win_1337_Patch.Tests
             foreach (var element in elements)
             {
                 Assert.IsNotNull(element.Value.ValueXml, $"Setting '{element.Name}' must carry a serialized value node.");
-                Assert.AreEqual("True", element.Value.ValueXml.InnerText, $"Setting '{element.Name}' must serialize as True.");
+                Assert.AreEqual(element.Name == "changeOwnership" ? "False" : "True", element.Value.ValueXml.InnerText,
+                    $"Setting '{element.Name}' must serialize its safe default.");
             }
         }
 
         [STATestMethod]
         public void FormLoadsOriginalResourcesAndLayout()
         {
+            var previousContext = SynchronizationContext.Current;
             Form1 form = null;
             try
             {
@@ -116,6 +122,133 @@ namespace Win_1337_Patch.Tests
             finally
             {
                 form?.Dispose();
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+        }
+
+        [TestMethod]
+        public void NormalStartupDoesNotRequestElevation()
+        {
+            var document = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "MigrationFixtures", "app.manifest"));
+            var executionLevel = document.Descendants(XName.Get("requestedExecutionLevel", "urn:schemas-microsoft-com:asm.v3")).Single();
+            Assert.AreEqual("asInvoker", executionLevel.Attribute("level").Value);
+            Assert.AreEqual("false", executionLevel.Attribute("uiAccess").Value);
+        }
+
+        [TestMethod]
+        public void SettingsSourceHasSameSafeDefaultsAsRuntime()
+        {
+            var document = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "MigrationFixtures", "Settings.settings"));
+            XNamespace ns = "http://schemas.microsoft.com/VisualStudio/2004/01/settings";
+            foreach (var setting in document.Descendants(ns + "Setting"))
+            {
+                var name = setting.Attribute("Name").Value;
+                Assert.AreEqual(name == "changeOwnership" ? "False" : "True", setting.Element(ns + "Value").Value);
+            }
+        }
+
+        [STATestMethod]
+        public void FormIgnoresSavedOwnershipAndDoesNotSaveOnLoad()
+        {
+            var previousContext = SynchronizationContext.Current;
+            var settings = new FakeSettings { FixOffset = false, CreateBackup = false };
+            try
+            {
+                using (var form = CreateTestForm(settings))
+                {
+                    form.InitializePreferences();
+                    Assert.IsFalse(((CheckBox)form.Controls["cchangeOwnership"]).Checked);
+                    Assert.IsFalse(((CheckBox)form.Controls["cfileoffsett"]).Checked);
+                    Assert.IsFalse(((CheckBox)form.Controls["controlloBackup"]).Checked);
+                    Assert.AreEqual(0, settings.Saves);
+                }
+            }
+            finally
+            {
+                SynchronizationContext.SetSynchronizationContext(previousContext);
+            }
+        }
+
+        [STATestMethod]
+        public void GuiOwnershipCancellationDoesNotStartPatch()
+        {
+            var testContext = SynchronizationContext.Current;
+            int engineCalls = 0;
+            var coordinator = new PatchElevationCoordinator(_ =>
+            {
+                engineCalls++;
+                return PatchOutcome.SuccessOutcome("Patched.");
+            }, new FakePrivileges(), new NeverLauncher());
+            using (var form = new Form1(coordinator, new FakeSettings(), _ => Task.FromResult(false), _ => false))
+            {
+                ((CheckBox)form.Controls["cchangeOwnership"]).Checked = true;
+                var outcome = CompleteWithUiPump(form.ExecuteGuiPatchAsync("patch.1337", "target.dll"));
+                Assert.IsFalse(outcome.Success);
+                Assert.AreEqual(0, engineCalls);
+                Assert.IsFalse(((CheckBox)form.Controls["cchangeOwnership"]).Checked);
+            }
+            SynchronizationContext.SetSynchronizationContext(testContext);
+        }
+
+        [STATestMethod]
+        public void GuiForwardsOnlyCurrentOperationOwnershipConsent()
+        {
+            var testContext = SynchronizationContext.Current;
+            bool requestedOwnership = false;
+            var coordinator = new PatchElevationCoordinator(request =>
+            {
+                requestedOwnership = request.TakeOwnership;
+                return PatchOutcome.SuccessOutcome("Patched.");
+            }, new FakePrivileges(), new NeverLauncher());
+            using (var form = new Form1(coordinator, new FakeSettings(), _ => Task.FromResult(false), _ => true))
+            {
+                ((CheckBox)form.Controls["cchangeOwnership"]).Checked = true;
+                var outcome = CompleteWithUiPump(form.ExecuteGuiPatchAsync("patch.1337", "target.dll"));
+                Assert.IsTrue(outcome.Success);
+                Assert.IsTrue(requestedOwnership);
+                Assert.IsFalse(((CheckBox)form.Controls["cchangeOwnership"]).Checked);
+                CompleteWithUiPump(form.ExecuteGuiPatchAsync("patch.1337", "target.dll"));
+                Assert.IsFalse(requestedOwnership);
+            }
+            SynchronizationContext.SetSynchronizationContext(testContext);
+        }
+
+        private static PatchOutcome CompleteWithUiPump(Task<PatchOutcome> operation)
+        {
+            var timeout = Stopwatch.StartNew();
+            while (!operation.IsCompleted && timeout.Elapsed < TimeSpan.FromSeconds(5))
+                Application.DoEvents();
+            Assert.IsTrue(operation.IsCompleted, "The GUI operation must complete while the UI message queue is processed.");
+            return operation.GetAwaiter().GetResult();
+        }
+
+        private static Form1 CreateTestForm(FakeSettings settings)
+        {
+            var coordinator = new PatchElevationCoordinator(_ => PatchOutcome.SuccessOutcome("Unused."),
+                new FakePrivileges(), new NeverLauncher());
+            return new Form1(coordinator, settings, _ => Task.FromResult(false), _ => false);
+        }
+
+        private sealed class FakeSettings : IGuiPatchSettings
+        {
+            public bool FixOffset { get; set; } = true;
+            public bool CreateBackup { get; set; } = true;
+            public bool SavedOwnership => true;
+            public int Saves { get; private set; }
+            public void Save() { Saves++; }
+        }
+
+        private sealed class FakePrivileges : IPrivilegeContext
+        {
+            public bool IsElevated => false;
+        }
+
+        private sealed class NeverLauncher : IElevatedPatchLauncher
+        {
+            public Task<PatchOutcome> LaunchAsync(PatchRequest request)
+            {
+                Assert.Fail("This GUI test must not launch an elevated child.");
+                return Task.FromResult(PatchOutcome.Failure("Unexpected launch."));
             }
         }
     }

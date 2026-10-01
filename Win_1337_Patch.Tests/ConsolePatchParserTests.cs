@@ -1,6 +1,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Windows.Forms;
 using Win_1337_Patch;
+using System;
+using System.Threading.Tasks;
 
 namespace Win_1337_Patch.Tests
 {
@@ -25,11 +27,132 @@ namespace Win_1337_Patch.Tests
             Assert.IsTrue(parser.IsValid);
             Assert.IsTrue(parser.ScheduledRun);
         }
+
+        [TestMethod]
+        public void ElevationDefaultsOff()
+        {
+            var parser = new Program.ConsolePatchParser(new[] { "driver.1337", "driver.dll", "-takeownership", "-scheduledrun" });
+            Assert.IsTrue(parser.IsValid);
+            Assert.IsFalse(parser.Elevate);
+            Assert.IsFalse(parser.ElevatedWorker);
+        }
+
+        [TestMethod]
+        [DataRow("-elevate")]
+        [DataRow("--elevate")]
+        public void RecognizesElevationAliases(string option)
+        {
+            var parser = new Program.ConsolePatchParser(new[] { "driver.1337", "driver.dll", option });
+            Assert.IsTrue(parser.IsValid);
+            Assert.IsTrue(parser.Elevate);
+        }
+
+        [TestMethod]
+        public void WorkerCannotSchedule()
+        {
+            var parser = new Program.ConsolePatchParser(new[] { "driver.1337", "driver.dll", "-elevatedworker", "-schedule" });
+            Assert.IsFalse(parser.IsValid);
+        }
+
+        [TestMethod]
+        public async Task ScheduledRunDoesNotReschedule()
+        {
+            var parser = new Program.ConsolePatchParser(new[] { "driver.1337", "driver.dll", "-schedule", "-scheduledrun" });
+            int engineCalls = 0;
+            var coordinator = new PatchElevationCoordinator(_ =>
+            {
+                engineCalls++;
+                return PatchOutcome.SuccessOutcome("Patched.");
+            }, new Privileges(false), new NeverLauncher());
+            var result = await Program.ExecuteConsoleRequestAsync(parser, coordinator, new Privileges(false), _ =>
+            {
+                Assert.Fail("Scheduled replay must not reschedule.");
+                return ScheduledPatchResult.Failure("Unexpected scheduling.");
+            });
+            Assert.IsTrue(result.Success);
+            Assert.AreEqual(1, engineCalls);
+        }
+
+        [TestMethod]
+        public async Task UnelevatedWorkerCannotExecutePatch()
+        {
+            var parser = new Program.ConsolePatchParser(new[] { "driver.1337", "driver.dll", "-elevatedworker" });
+            int engineCalls = 0;
+            var coordinator = new PatchElevationCoordinator(_ =>
+            {
+                engineCalls++;
+                return PatchOutcome.SuccessOutcome("Unexpected patch.");
+            }, new Privileges(false), new NeverLauncher());
+            var result = await Program.ExecuteConsoleRequestAsync(parser, coordinator, new Privileges(false), _ =>
+                ScheduledPatchResult.Failure("Unused."));
+            Assert.IsFalse(result.Success);
+            Assert.AreEqual(0, engineCalls);
+        }
+
+        [TestMethod]
+        public async Task SchedulingOccursWithoutPatchingOrImplicitElevation()
+        {
+            var parser = new Program.ConsolePatchParser(new[] { "driver.1337", "driver.dll", "-schedule", "-elevate", "-backup" });
+            var coordinator = new PatchElevationCoordinator(_ =>
+            {
+                Assert.Fail("Scheduling must not apply the patch.");
+                return null;
+            }, new Privileges(false), new NeverLauncher());
+            PatchScheduleDescriptor scheduled = null;
+            var result = await Program.ExecuteConsoleRequestAsync(parser, coordinator, new Privileges(false), descriptor =>
+            {
+                scheduled = descriptor;
+                return ScheduledPatchResult.SuccessResult("Scheduled.", "test", "test");
+            });
+            Assert.IsTrue(result.Success);
+            Assert.IsTrue(scheduled.Elevate);
+            Assert.IsTrue(scheduled.CreateBackup);
+            Assert.IsFalse(scheduled.TakeOwnership);
+        }
+
+        [TestMethod]
+        public async Task ElevatedWorkerExecutesFreshValidation()
+        {
+            var parser = new Program.ConsolePatchParser(new[] { "driver.1337", "driver.dll", "-elevatedworker" });
+            var result = await Program.ExecuteConsoleRequestAsync(parser,
+                new PatchElevationCoordinator(request => PatchOutcome.Failure("Expected bytes changed."),
+                    new Privileges(true), new NeverLauncher()),
+                new Privileges(true), _ => ScheduledPatchResult.Failure("Unused."));
+            Assert.IsFalse(result.Success);
+            Assert.AreEqual("Expected bytes changed.", result.Message);
+        }
+
+        private sealed class Privileges : IPrivilegeContext
+        {
+            public Privileges(bool elevated) { IsElevated = elevated; }
+            public bool IsElevated { get; }
+        }
+
+        private sealed class NeverLauncher : IElevatedPatchLauncher
+        {
+            public Task<PatchOutcome> LaunchAsync(PatchRequest request)
+            {
+                Assert.Fail("This route must not elevate.");
+                return Task.FromResult(PatchOutcome.Failure("Unexpected elevation."));
+            }
+        }
     }
 
     [TestClass]
     public sealed class ScheduledPatchManagerTests
     {
+        [TestMethod]
+        public void ScheduledCommandCarriesOnlyExplicitElevationAndOwnership()
+        {
+            var descriptor = new PatchScheduleDescriptor(@"C:\patch folder\a&b.1337", @"C:\target.dll",
+                false, true, false, elevate: true);
+            Assert.AreEqual("\"C:\\patcher.exe\" -patch \"C:\\patch folder\\a&b.1337\" \"C:\\target.dll\" -backup -elevate -scheduledrun",
+                ScheduledPatchManager.BuildScheduledCommandLine(descriptor, @"C:\patcher.exe"));
+            Assert.AreEqual("\"C:\\patcher.exe\" -patch \"C:\\a.1337\" \"C:\\b.dll\" -scheduledrun",
+                ScheduledPatchManager.BuildScheduledCommandLine(new PatchScheduleDescriptor(@"C:\a.1337", @"C:\b.dll", false, false, false),
+                    @"C:\patcher.exe"));
+        }
+
         [TestMethod]
         public void BuildsCommandLineWithExpectedTokens()
         {

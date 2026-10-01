@@ -12,6 +12,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\Win_1337_Patch\app.config" Link="MigrationFixtures\app.config" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Win_1337_Patch\app.manifest" Link="MigrationFixtures\app.manifest" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Win_1337_Patch\Properties\Settings.settings" Link="MigrationFixtures\Settings.settings" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.10.1" />
