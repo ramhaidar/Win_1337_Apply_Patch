@@ -1,0 +1,176 @@
+name: Manual tagged draft release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing source tag containing the release pipeline
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: draft-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      source_sha: ${{ steps.source.outputs.source_sha }}
+      commit_time: ${{ steps.source.outputs.commit_time }}
+    steps:
+      - name: Resolve exact existing tag
+        id: source
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        with:
+          retries: 0
+          script: |
+            // BEGIN resolve-tag
+            const tag = process.env.RELEASE_TAG;
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(tag ?? '') || tag.includes('..') || tag.endsWith('.') || /\.lock$/i.test(tag) || /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(tag)) {
+              throw new Error('Select an existing simple tag, not a branch, path, ref or SHA.');
+            }
+            const response = await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` });
+            if (response.data.ref !== `refs/tags/${tag}`) throw new Error('Tag API returned a different reference.');
+            let object = response.data.object;
+            const seen = new Set();
+            while (object.type === 'tag') {
+              if (!/^[a-f0-9]{40}$/.test(object.sha) || seen.has(object.sha) || seen.size >= 16) throw new Error('Invalid or cyclic annotated tag.');
+              seen.add(object.sha);
+              object = (await github.rest.git.getTag({ ...context.repo, tag_sha: object.sha })).data.object;
+            }
+            if (object.type !== 'commit' || !/^[a-f0-9]{40}$/.test(object.sha)) throw new Error('Tag does not resolve to a commit.');
+            const commit = (await github.rest.repos.getCommit({ ...context.repo, ref: object.sha })).data;
+            if (commit.sha !== object.sha || !Number.isFinite(Date.parse(commit.commit.committer.date))) throw new Error('Invalid commit metadata.');
+            core.setOutput('tag', tag);
+            core.setOutput('source_sha', object.sha);
+            core.setOutput('commit_time', commit.commit.committer.date);
+            // END resolve-tag
+
+  build:
+    needs: resolve
+    runs-on: windows-2025
+    timeout-minutes: 45
+    steps:
+      - name: Check out resolved source commit
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require configuration at selected tag
+        shell: pwsh
+        run: |
+          foreach ($file in @('global.json', 'Directory.Build.props', 'scripts/Build-Release.ps1', 'scripts/Verify-Build.ps1', 'scripts/ReleaseArtifacts.psm1', 'Win_1337_Patch/packages.lock.json', 'Win_1337_Patch.Tests/packages.lock.json', 'Win_1337_Patch/packages.win-x64-framework-dependent.lock.json', 'Win_1337_Patch/packages.win-x64-self-contained.lock.json')) {
+            if (-not (Test-Path -LiteralPath $file -PathType Leaf)) { throw "Selected tag lacks $file. Select a tag containing this pipeline; no fallback source or unlocked restore is allowed." }
+          }
+      - name: Install pinned SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Verify and build both distributions
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          COMMIT_TIME: ${{ needs.resolve.outputs.commit_time }}
+        run: |
+          pwsh -NoProfile -File scripts/Build-Release.ps1 -Tag $env:RELEASE_TAG -SourceCommit $env:SOURCE_SHA -CommitTimeUtc $env:COMMIT_TIME -OutputDirectory artifacts/release
+          if ($LASTEXITCODE -ne 0) { throw 'Release build failed.' }
+      - name: Retain exactly the verified assets
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: release-${{ needs.resolve.outputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/release/*
+          if-no-files-found: error
+          overwrite: false
+
+  draft:
+    needs: [resolve, build]
+    if: github.repository == 'ramhaidar/Win_1337_Apply_Patch'
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Download this run's verified assets
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6
+        with:
+          name: release-${{ needs.resolve.outputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release-assets
+      - name: Verify bytes and create draft without rebuilding
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          COMMIT_TIME: ${{ needs.resolve.outputs.commit_time }}
+          ARTIFACT_DIRECTORY: release-assets
+        with:
+          retries: 0
+          script: |
+            // BEGIN promote-draft
+            const fs = require('node:fs');
+            const path = require('node:path');
+            const crypto = require('node:crypto');
+            const tag = process.env.RELEASE_TAG;
+            const sha = process.env.SOURCE_SHA;
+            const repository = 'ramhaidar/Win_1337_Apply_Patch';
+            if (process.env.GITHUB_REPOSITORY !== repository || `${context.repo.owner}/${context.repo.repo}` !== repository) throw new Error('Draft creation is restricted to the maintainer repository.');
+            if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(tag ?? '') || tag.includes('..') || tag.endsWith('.') || /\.lock$/i.test(tag) || /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(tag) || !/^[a-f0-9]{40}$/.test(sha ?? '')) throw new Error('Invalid release identity.');
+            const names = ['framework-dependent', 'self-contained'].map(mode => `Win_1337_Patch-${tag}-win-x64-${mode}.zip`);
+            const assets = [...names, 'SHA256SUMS', 'provenance.json'];
+            const directory = path.resolve(process.env.ARTIFACT_DIRECTORY);
+            const root = fs.lstatSync(directory);
+            if (!root.isDirectory() || root.isSymbolicLink()) throw new Error('Invalid artifact root.');
+            const entries = fs.readdirSync(directory);
+            if (entries.length !== assets.length || entries.some(name => !assets.includes(name))) throw new Error('Unexpected or missing artifact filenames.');
+            const bytes = new Map();
+            for (const name of assets) {
+              const file = path.join(directory, name);
+              const stat = fs.lstatSync(file);
+              if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Not a regular artifact: ${name}`);
+              bytes.set(name, fs.readFileSync(file));
+            }
+            const hashes = names.map(name => ({ name, sha256: crypto.createHash('sha256').update(bytes.get(name)).digest('hex') }));
+            const manifest = hashes.map(asset => `${asset.sha256}  ${asset.name}\n`).join('');
+            if (!bytes.get('SHA256SUMS').equals(Buffer.from(manifest, 'utf8'))) throw new Error('SHA256SUMS differs from verified ZIP bytes.');
+            const provenance = JSON.parse(bytes.get('provenance.json').toString('utf8'));
+            const runUrl = `${process.env.GITHUB_SERVER_URL}/${repository}/actions/runs/${process.env.GITHUB_RUN_ID}`;
+            if (provenance.schemaVersion !== 1 || provenance.repository !== repository || provenance.sourceStatus !== 'tag-checkout' || provenance.sourceTag !== tag || provenance.sourceCommit !== sha || Date.parse(provenance.commitTimeUtc) !== Date.parse(process.env.COMMIT_TIME) || provenance.workflowRef !== process.env.GITHUB_WORKFLOW_REF || provenance.workflowSha !== process.env.GITHUB_WORKFLOW_SHA || provenance.runUrl !== runUrl || provenance.sdkVersion !== '10.0.401' || provenance.runtimeVersion !== '10.0.12' || provenance.assemblyVersion !== '2.3.0.0') throw new Error('Provenance does not match this source and workflow run.');
+            if (JSON.stringify(provenance.publishModes) !== JSON.stringify(['framework-dependent', 'self-contained']) || !Array.isArray(provenance.artifacts) || provenance.artifacts.length !== 2 || hashes.some((asset, i) => provenance.artifacts[i]?.name !== asset.name || provenance.artifacts[i]?.sha256 !== asset.sha256)) throw new Error('Provenance artifact hashes or modes do not match.');
+            async function resolveTag() {
+              const ref = (await github.rest.git.getRef({ ...context.repo, ref: `tags/${tag}` })).data;
+              if (ref.ref !== `refs/tags/${tag}`) throw new Error('Different tag reference returned.');
+              let object = ref.object;
+              const seen = new Set();
+              while (object.type === 'tag') {
+                if (!/^[a-f0-9]{40}$/.test(object.sha) || seen.has(object.sha) || seen.size >= 16) throw new Error('Invalid annotated tag.');
+                seen.add(object.sha);
+                object = (await github.rest.git.getTag({ ...context.repo, tag_sha: object.sha })).data.object;
+              }
+              if (object.type !== 'commit' || object.sha !== sha) throw new Error('Source tag moved or no longer resolves to the built commit.');
+            }
+            for (let page = 1; ; page++) {
+              const releases = (await github.rest.repos.listReleases({ ...context.repo, per_page: 100, page })).data;
+              if (releases.some(release => release.tag_name === tag)) throw new Error('Release or draft already exists; no assets will be overwritten.');
+              if (releases.length < 100) break;
+              if (page >= 1000) throw new Error('Release listing exceeded safe pagination limit.');
+            }
+            await resolveTag();
+            const notes = `Built from existing tag ${tag}, source commit ${sha}.\n\nFramework-dependent ZIP requires .NET Desktop Runtime 10.0.12 or a compatible newer patch (x64). Self-contained ZIP bundles runtime 10.0.12. Keep each complete extracted folder.\n\nAssembly version remains 2.3.0.0. Original author: DeltaFoX (DeFconX); GPLv3 LICENSE is included. These binaries are unsigned; SHA-256 is integrity data, not Authenticode or an antivirus guarantee. No artifact attestation is implemented.\n\nWorkflow: ${provenance.workflowRef}\nWorkflow commit: ${provenance.workflowSha}\nBuild run: ${runUrl}\n\nReview all assets and provenance before manually publishing this draft. Hosted provenance does not itself prove byte-identical cross-machine rebuilds.`;
+            const release = (await github.rest.repos.createRelease({ ...context.repo, tag_name: tag, target_commitish: sha, name: tag, body: notes, draft: true, prerelease: false })).data;
+            if (!release.draft || release.tag_name !== tag) throw new Error('API did not create the expected draft. Inspect it manually.');
+            for (const name of assets) {
+              const data = bytes.get(name);
+              const uploaded = (await github.rest.repos.uploadReleaseAsset({ ...context.repo, release_id: release.id, name, data, headers: { 'content-type': 'application/octet-stream', 'content-length': data.length } })).data;
+              if (uploaded.name !== name || uploaded.state !== 'uploaded' || uploaded.size !== data.length) throw new Error(`Incomplete asset upload: ${name}. Inspect the remaining draft manually.`);
+            }
+            core.info(`Draft created: ${release.html_url}. Nothing has been published.`);
+            // END promote-draft
