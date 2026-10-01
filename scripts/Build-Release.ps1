@@ -74,7 +74,7 @@ try {
         foreach ($file in $required) {
             if (-not [IO.File]::Exists((Join-Path $publish $file))) { throw "Incomplete $mode publish: $file" }
         }
-        $info = "Win_1337_Patch`nOriginal author: DeltaFoX (DeFconX)`nLicense: GPLv3 (see LICENSE)`nSource tag: $Tag`nSource commit: $SourceCommit`nSDK: 10.0.401`nRuntime: 10.0.12`nAssembly version: 2.3.0.0`nMode: win-x64 $mode`n"
+        $info = "Win_1337_Patch`nOriginal author: DeltaFoX (DeFconX)`nLicense: GPLv3 (see LICENSE)`nSource tag: $Tag`nSource commit: $SourceCommit`nSDK: 10.0.401`nRuntime: 10.0.12`nAssembly version: 2.4.0.0`nMode: win-x64 $mode`n"
         New-ReleaseZip $publish (Join-Path $OutputDirectory $names[$index]) $CommitTimeUtc (Join-Path $RepositoryPath 'LICENSE') $info
     }
     Write-ReleaseHashes $OutputDirectory $names
@@ -92,7 +92,7 @@ try {
         sdkVersion = '10.0.401'
         runtimeVersion = '10.0.12'
         runnerImage = if ($hosted) { "$($env:ImageOS) $($env:ImageVersion)" } else { 'local Windows' }
-        assemblyVersion = '2.3.0.0'
+        assemblyVersion = '2.4.0.0'
         publishModes = $modes
         artifacts = $artifacts
     }

@@ -106,8 +106,8 @@ namespace Win_1337_Patch.Tests
                 form = new Form1();
 
                 Assert.IsNotNull(form.Icon, "Form1 must keep the embedded vampire icon from 1337.resx.");
-                StringAssert.Contains(form.Text, "v2.3",
-                    "Form1 title must keep the original v2.3 version text.");
+                StringAssert.Contains(form.Text, "v2.4",
+                    "Form1 title must reflect the v2.4 assembly version.");
                 Assert.AreEqual(AutoScaleMode.Font, form.AutoScaleMode,
                     "Form1 must keep the original designer AutoScaleMode.Font.");
                 Assert.AreEqual(6F, form.AutoScaleDimensions.Width,

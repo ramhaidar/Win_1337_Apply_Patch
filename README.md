@@ -10,7 +10,7 @@ Windows desktop utility for applying text-based `.1337` byte patches to `.exe` a
 
 A `.1337` file identifies an expected target filename and one or more byte replacements. Win_1337_Apply_Patch validates the target name and expected bytes before writing the modified binary. After a successful write it removes the PE certificate and recalculates the PE checksum; checksum normalization is skipped only through the internal `skipChecksum` path used by tests.
 
-The assembly version is `2.3.0.0` (`Win_1337_Patch/Properties/AssemblyInfo.cs`), matching the latest tag `v2.3`.
+The assembly version is `2.4.0.0` (`Win_1337_Patch/Properties/AssemblyInfo.cs`), matching the `v2.4` release. The latest published tag is still `v2.3` until a `v2.4` tag is created and released.
 
 The project is a fork associated with [@ramhaidar](https://github.com/ramhaidar/Win_1337_Apply_Patch) and retains attribution to the original author, DeltaFoX (DeFconX). Two remotes are configured: `origin` points at the `ramhaidar` fork and `upstream` at [Deltafox79/Win_1337_Apply_Patch](https://github.com/Deltafox79/Win_1337_Apply_Patch).
 
@@ -299,7 +299,7 @@ The workflow verifies/builds that SHA on Windows with SDK `10.0.401`, pins the r
 - `SHA256SUMS` — SHA-256 for both ZIPs, not MD5.
 - `provenance.json` — source tag/SHA, workflow ref/SHA, run URL, toolchain, runtime modes and ZIP hashes.
 
-The draft job downloads and uploads **the same verified ZIP bytes**, without rebuilding or executing downloaded code. Only that job has release-write permission; it rejects moved/missing tags, existing drafts/releases, unexpected files and mismatched hashes/provenance. Failed uploads can leave a partial draft: inspect it manually rather than rerunning to overwrite assets. Review the run, provenance and assets before manually publishing the draft. The package tag does **not** change the handwritten assembly version, currently `2.3.0.0`.
+The draft job downloads and uploads **the same verified ZIP bytes**, without rebuilding or executing downloaded code. Only that job has release-write permission; it rejects moved/missing tags, existing drafts/releases, unexpected files and mismatched hashes/provenance. Failed uploads can leave a partial draft: inspect it manually rather than rerunning to overwrite assets. Review the run, provenance and assets before manually publishing the draft. The package tag does **not** change the handwritten assembly version. Keep `Win_1337_Patch/Properties/AssemblyInfo.cs` in sync with each release, currently `2.4.0.0`: `ReleaseIdentityTests` fails the test suite if the compiled version drifts from the released identity.
 
 ### Rebuild and verify integrity
 
@@ -359,7 +359,7 @@ Publishing notes:
 - Distribute the **complete published directory**, not just the `Win_1337_Patch.exe`. The `.dll`, `.deps.json`, `.runtimeconfig.json`, and `.dll.config` files next to it are required at runtime.
 - A framework-dependent output requires the .NET Desktop Runtime 10.0 installed **for the matching architecture** (an x64 build needs the x64 runtime, x86 needs the x86 runtime).
 - A self-contained output bundles the runtime and needs no .NET installation, but it is significantly larger and must be **republished** to pick up .NET runtime security updates.
-- The published `.exe` is the native apphost; it carries the `asInvoker` manifest, application icon and version `2.3.0.0` resources. Use the manual tagged pipeline above for official release ZIPs; raw publish examples are developer outputs, not equivalent provenance guarantees. [Signing/vendor-submission guidance](docs/RELEASE-SECURITY.md) is documentation, not completed external signing or vendor approval.
+- The published `.exe` is the native apphost; it carries the `asInvoker` manifest, application icon and version `2.4.0.0` resources. Use the manual tagged pipeline above for official release ZIPs; raw publish examples are developer outputs, not equivalent provenance guarantees. [Signing/vendor-submission guidance](docs/RELEASE-SECURITY.md) is documentation, not completed external signing or vendor approval.
 - No trimming, Native AOT, single-file packaging, or ReadyToRun options are used or supported by this repository's configuration.
 
 ## Troubleshooting
