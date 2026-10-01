@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Win_1337_Patch
@@ -10,6 +11,26 @@ namespace Win_1337_Patch
     static class Program
     {
         private static bool consoleReady;
+
+        internal static async Task<PatchOutcome> ExecuteConsoleRequestAsync(ConsolePatchParser parser,
+            PatchElevationCoordinator coordinator, IPrivilegeContext privileges,
+            Func<PatchScheduleDescriptor, ScheduledPatchResult> schedule, Action<string> log = null)
+        {
+            if (!parser.IsValid)
+                return PatchOutcome.Failure(parser.ErrorMessage ?? "Invalid patch arguments.");
+            if (parser.ElevatedWorker && (!privileges.IsElevated || parser.ScheduleOnNextBoot))
+                return PatchOutcome.Failure("An elevated worker requires an administrator token and cannot schedule patches.");
+            if (parser.ScheduleOnNextBoot && !parser.ScheduledRun)
+            {
+                var scheduled = schedule(new PatchScheduleDescriptor(parser.PatchFilePath, parser.TargetFilePath,
+                    parser.FixOffset, parser.CreateBackup, parser.TakeOwnership, parser.Elevate));
+                return scheduled.Success ? PatchOutcome.SuccessOutcome(scheduled.Message)
+                    : PatchOutcome.Failure(scheduled.Message, scheduled.Error);
+            }
+            var request = new PatchRequest(parser.PatchFilePath, parser.TargetFilePath,
+                parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
+            return await coordinator.ApplyAsync(request, parser.Elevate, parser.ElevatedWorker);
+        }
 
         /// <summary>
         /// Punto di ingresso principale dell'applicazione.
@@ -74,15 +95,6 @@ namespace Win_1337_Patch
 
             var patchDescription = $"Patch mode: {Path.GetFileName(patchFilePath)} -> {targetFilePath}";
 
-            if (parser.ScheduleOnNextBoot && !parser.ScheduledRun)
-            {
-                var descriptor = new PatchScheduleDescriptor(patchFilePath, targetFilePath, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
-                var scheduleResult = ScheduledPatchManager.Schedule(descriptor, LogToConsole);
-                Console.WriteLine(scheduleResult.Message);
-                Environment.ExitCode = scheduleResult.Success ? 0 : 1;
-                return;
-            }
-
             if (parser.ScheduledRun)
             {
                 Console.WriteLine();
@@ -91,10 +103,19 @@ namespace Win_1337_Patch
 
             Console.WriteLine();
             Console.WriteLine(patchDescription);
-            Console.WriteLine("Applying patch...");
+            Console.WriteLine(parser.ScheduleOnNextBoot && !parser.ScheduledRun ? "Scheduling patch for next login..." : "Applying patch...");
 
-            var request = new PatchRequest(patchFilePath, targetFilePath, parser.FixOffset, parser.CreateBackup, parser.TakeOwnership);
-            var result = PatchEngine.ApplyPatch(request, LogToConsole);
+            PatchOutcome result;
+            try
+            {
+                result = ExecuteConsoleRequestAsync(parser, PatchElevationCoordinator.CreateDefault(LogToConsole),
+                    new WindowsPrivilegeContext(), descriptor => ScheduledPatchManager.Schedule(descriptor, LogToConsole),
+                    LogToConsole).GetAwaiter().GetResult();
+            }
+            catch (Exception ex)
+            {
+                result = PatchOutcome.Failure($"Patch operation failed: {ex.Message}", ex);
+            }
 
             Console.WriteLine(result.Message);
             Environment.ExitCode = result.Success ? 0 : 1;
@@ -122,10 +143,12 @@ namespace Win_1337_Patch
             Console.WriteLine("Options:");
             Console.WriteLine("  -fileoffset, --fileoffset   Apply the same 0xC00 offset adjustment used by the GUI.");
             Console.WriteLine("  -backup, --backup           Keep a timestamped backup of the target before patching.");
-            Console.WriteLine("  -takeownership              Run takeown/icacls so the patch can overwrite protected files.");
-            Console.WriteLine("  -schedule, --schedule, -runonce, --run-once, -run-on-reboot, --run-on-reboot   Schedule the patch to run after the next reboot.");
+            Console.WriteLine("  -elevate, --elevate         Allow one UAC administrator operation only if normal access fails.");
+            Console.WriteLine("  -takeownership              Allow target-only ownership fallback after normal elevated write access fails; also requires -elevate or an administrator context.");
+            Console.WriteLine("  -schedule, --schedule, -runonce, --run-once, -run-on-reboot, --run-on-reboot   Schedule for next login; elevation still requires explicit -elevate and UAC consent.");
             Console.WriteLine("  -scheduledrun, --scheduled-run   Internally generated when a scheduled patch executes; you normally do not use this flag directly.");
-            Console.WriteLine("  -help, --help, /?           Show this help text.");
+            Console.WriteLine("  -elevatedworker, --elevated-worker   Internal one-shot worker marker; does not authorize or bypass elevation.");
+            Console.WriteLine("  -h, --help, /?             Show this help text.");
             Console.WriteLine();
         }
 
@@ -159,6 +182,8 @@ namespace Win_1337_Patch
             private static readonly string[] ScheduleSwitches = { "-schedule", "--schedule", "-runonce", "--run-once", "-run-on-reboot", "--run-on-reboot" };
             private static readonly string[] ScheduledRunSwitches = { "-scheduledrun", "--scheduled-run" };
             private static readonly string[] PatchSwitches = { "-patch", "--patch" };
+            private static readonly string[] ElevationSwitches = { "-elevate", "--elevate" };
+            private static readonly string[] WorkerSwitches = { "-elevatedworker", "--elevated-worker" };
 
             public ConsolePatchParser(string[] args)
             {
@@ -208,6 +233,18 @@ namespace Win_1337_Patch
                         continue;
                     }
 
+                    if (ElevationSwitches.Contains(normalized))
+                    {
+                        Elevate = true;
+                        continue;
+                    }
+
+                    if (WorkerSwitches.Contains(normalized))
+                    {
+                        ElevatedWorker = true;
+                        continue;
+                    }
+
                     if (PatchFilePath == null)
                     {
                         PatchFilePath = current;
@@ -230,6 +267,11 @@ namespace Win_1337_Patch
                     return;
                 }
 
+                if (ElevatedWorker && ScheduleOnNextBoot)
+                {
+                    ErrorMessage = "An elevated worker cannot schedule patches.";
+                    return;
+                }
                 IsValid = true;
             }
 
@@ -243,6 +285,8 @@ namespace Win_1337_Patch
             public bool TakeOwnership { get; private set; }
             public bool ScheduleOnNextBoot { get; private set; }
             public bool ScheduledRun { get; private set; }
+            public bool Elevate { get; private set; }
+            public bool ElevatedWorker { get; private set; }
         }
 
         private static class NativeMethods

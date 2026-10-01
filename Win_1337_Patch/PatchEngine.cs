@@ -1,8 +1,7 @@
 using System;
-using System.Diagnostics;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Runtime.InteropServices;
 
 namespace Win_1337_Patch
 {
@@ -36,6 +35,9 @@ namespace Win_1337_Patch
         internal bool SkipChecksum { get; }
     }
 
+    internal enum PatchFailureKind { None, Validation, AccessDenied, IoFailure, PostMutationFailure, PrivilegedOperationFailed }
+    internal enum PatchStage { None, PatchRead, TargetRead, TargetWrite, Backup, Ownership, Normalize }
+
     public sealed class PatchOutcome
     {
         private PatchOutcome(bool success, string message, string backupPath, Exception error)
@@ -50,6 +52,11 @@ namespace Win_1337_Patch
         public string Message { get; }
         public string BackupPath { get; }
         public Exception Error { get; }
+        internal PatchFailureKind FailureKind { get; private set; }
+        internal PatchStage Stage { get; private set; }
+        internal string FailurePath { get; private set; }
+        internal bool TargetMayBeModified { get; private set; }
+        internal bool CanRetryElevated { get; private set; }
 
         public static PatchOutcome SuccessOutcome(string message, string backupPath = null)
         {
@@ -58,7 +65,21 @@ namespace Win_1337_Patch
 
         public static PatchOutcome Failure(string message, Exception error = null)
         {
-            return new PatchOutcome(false, message, null, error);
+            return Failed(message, PatchFailureKind.Validation, PatchStage.None, null, error);
+        }
+
+        internal static PatchOutcome Failed(string message, PatchFailureKind kind, PatchStage stage,
+            string path, Exception error = null, bool targetMayBeModified = false, string backupPath = null)
+        {
+            return new PatchOutcome(false, message, backupPath, error)
+            {
+                FailureKind = kind,
+                Stage = stage,
+                FailurePath = path,
+                TargetMayBeModified = targetMayBeModified,
+                CanRetryElevated = kind == PatchFailureKind.AccessDenied && !targetMayBeModified &&
+                    (stage == PatchStage.TargetRead || stage == PatchStage.TargetWrite || stage == PatchStage.Backup)
+            };
         }
     }
 
@@ -66,10 +87,17 @@ namespace Win_1337_Patch
     {
         private const int FileOffsetAdjustment = 0xC00;
 
-        public static PatchOutcome ApplyPatch(PatchRequest request, Action<string> log = null)
+        internal static PatchOutcome ApplyPatch(PatchRequest request, PatchExecutionContext context, Action<string> log = null)
         {
             if (request == null)
                 throw new ArgumentNullException(nameof(request));
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            var stage = PatchStage.None;
+            string failurePath = null;
+            string backupPath = null;
+            bool mutationStarted = false;
 
             try
             {
@@ -87,14 +115,9 @@ namespace Win_1337_Patch
                 if (!File.Exists(targetFile))
                     return PatchOutcome.Failure($"Target file not found: {targetFile}");
 
-                if (request.TakeOwnership)
-                {
-                    var ownership = GrantOwnership(targetFile, log);
-                    if (!ownership.Success)
-                        return PatchOutcome.Failure(ownership.Message, ownership.Error);
-                }
-
-                var lines = File.ReadAllLines(patchFile);
+                stage = PatchStage.PatchRead;
+                failurePath = patchFile;
+                var lines = context.Files.ReadPatchLines(patchFile);
                 if (lines.Length == 0)
                 {
                     return PatchOutcome.Failure("Patch file is empty.");
@@ -113,7 +136,7 @@ namespace Win_1337_Patch
                 if (!string.Equals(expectedNameLower, actualNameLower, StringComparison.Ordinal))
                     return PatchOutcome.Failure($"The .1337 file is not valid for '{Path.GetFileName(targetFile)}'. Expected '{Path.GetFileName(expectedName)}'.");
 
-                var buffer = File.ReadAllBytes(targetFile);
+                var entries = new List<PatchEntry>();
                 var offsetAdjustment = request.FixFileOffset ? FileOffsetAdjustment : 0;
 
                 for (var i = 1; i < lines.Length; i++)
@@ -136,8 +159,8 @@ namespace Win_1337_Patch
                     if (!int.TryParse(offsetText, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var offset))
                         return PatchOutcome.Failure($"Line {i + 1}: offset '{offsetText}' is not valid hexadecimal.");
 
-                    var adjustedOffset = offset - offsetAdjustment;
-                    if (adjustedOffset < 0 || adjustedOffset >= buffer.Length)
+                    var adjustedOffset = (long)offset - offsetAdjustment;
+                    if (adjustedOffset < 0 || adjustedOffset > int.MaxValue)
                         return PatchOutcome.Failure($"Line {i + 1}: computed offset 0x{adjustedOffset:X} is outside the target file.");
 
                     if (!byte.TryParse(tokens[0], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var expectedByte))
@@ -146,28 +169,59 @@ namespace Win_1337_Patch
                     if (!byte.TryParse(tokens[1], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var replacementByte))
                         return PatchOutcome.Failure($"Line {i + 1}: replacement byte '{tokens[1]}' is not valid hexadecimal.");
 
-                    if (buffer[adjustedOffset] != expectedByte)
-                        return PatchOutcome.Failure($"Offset 0x{adjustedOffset:X} mismatch: found 0x{buffer[adjustedOffset]:X2}, expected 0x{expectedByte:X2}.");
-
-                    buffer[adjustedOffset] = replacementByte;
+                    entries.Add(new PatchEntry((int)adjustedOffset, expectedByte, replacementByte, i + 1));
                 }
 
-                string backupPath = null;
-                if (request.CreateBackup)
+                stage = PatchStage.TargetRead;
+                failurePath = targetFile;
+                using (var original = context.Files.OpenTarget(targetFile, FileAccess.Read))
                 {
-                    backupPath = CreateBackup(targetFile, log);
-                    if (backupPath == null)
-                        return PatchOutcome.Failure("Unable to create a backup copy of the target file.");
+                    var validation = ValidateAndReplace(ReadBuffer(original), entries);
+                    if (validation != null)
+                        return validation;
                 }
 
-                File.WriteAllBytes(targetFile, buffer);
-                log?.Invoke($"Wrote {buffer.Length} bytes to '{targetFile}'.");
+                stage = PatchStage.TargetWrite;
+                Stream writableTarget;
+                try
+                {
+                    writableTarget = context.Files.OpenTarget(targetFile, FileAccess.ReadWrite);
+                }
+                catch (UnauthorizedAccessException) when (request.TakeOwnership && context.Privileges.IsElevated)
+                {
+                    stage = PatchStage.Ownership;
+                    var ownership = context.Ownership.Grant(targetFile, log);
+                    if (!ownership.Success)
+                        return PatchOutcome.Failed(ownership.Message, PatchFailureKind.PrivilegedOperationFailed,
+                            PatchStage.Ownership, targetFile, ownership.Error);
+                    stage = PatchStage.TargetWrite;
+                    writableTarget = context.Files.OpenTarget(targetFile, FileAccess.ReadWrite);
+                }
+                using (var target = writableTarget)
+                {
+                    var buffer = ReadBuffer(target);
+                    var validation = ValidateAndReplace(buffer, entries);
+                    if (validation != null)
+                        return validation;
+
+                    if (request.CreateBackup)
+                    {
+                        stage = PatchStage.Backup;
+                        backupPath = context.Files.CreateBackup(targetFile, target, log);
+                    }
+
+                    stage = PatchStage.TargetWrite;
+                    target.Position = 0;
+                    mutationStarted = true;
+                    target.Write(buffer, 0, buffer.Length);
+                    target.Flush();
+                    log?.Invoke($"Wrote {buffer.Length} bytes to '{targetFile}'.");
+                }
 
                 if (!request.SkipChecksum)
                 {
-                    var normalizeResult = NormalizeFile(targetFile, log);
-                    if (!normalizeResult.Success)
-                        return PatchOutcome.Failure(normalizeResult.Message, normalizeResult.Error);
+                    stage = PatchStage.Normalize;
+                    context.Files.Normalize(targetFile, log);
                 }
                 else
                 {
@@ -182,150 +236,60 @@ namespace Win_1337_Patch
             }
             catch (Exception ex)
             {
-                return PatchOutcome.Failure($"Unexpected error while applying patch: {ex.Message}", ex);
+                var kind = mutationStarted ? PatchFailureKind.PostMutationFailure :
+                    ex is UnauthorizedAccessException ? PatchFailureKind.AccessDenied : PatchFailureKind.IoFailure;
+                var message = $"Patch failed during {stage}: {ex.Message}";
+                if (mutationStarted)
+                    message += " The target may have changed; do not retry without inspecting or restoring it.";
+                if (backupPath != null)
+                    message += $" Backup saved to {backupPath}.";
+                return PatchOutcome.Failed(message, kind, stage, failurePath, ex, mutationStarted, backupPath);
             }
         }
 
-        private static string CreateBackup(string targetFile, Action<string> log)
+        public static PatchOutcome ApplyPatch(PatchRequest request, Action<string> log = null)
         {
-            try
-            {
-                var backupFileName = $"{targetFile}.{DateTime.Now:yyyy-MM-dd_hh-mm-ss-tt}.BAK";
-                if (File.Exists(backupFileName))
-                    File.Delete(backupFileName);
-
-                File.Copy(targetFile, backupFileName);
-                log?.Invoke($"Backup created at '{backupFileName}'.");
-                return backupFileName;
-            }
-            catch (Exception ex)
-            {
-                log?.Invoke($"Backup failed: {ex.Message}");
-                return null;
-            }
+            return ApplyPatch(request, new PatchExecutionContext(new PatchFileOperations(),
+                new WindowsPrivilegeContext(), new FileOwnershipService()), log);
         }
 
-        private static FileNormalizationResult NormalizeFile(string filePath, Action<string> log)
+        private static byte[] ReadBuffer(Stream stream)
         {
-            try
+            stream.Position = 0;
+            using (var buffer = new MemoryStream())
             {
-                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-                {
-                    ImageRemoveCertificate(fs.SafeFileHandle.DangerousGetHandle(), 0);
-                }
-
-                checked
-                {
-                    var checksum = new mCheckSum();
-                    if (!checksum.FixCheckSum(filePath))
-                        return FileNormalizationResult.Failure("Checksum recalculation failed.");
-                }
-
-                log?.Invoke("PE checksum normalized.");
-                    return FileNormalizationResult.Succeeded("PE checksum normalized.");
-            }
-            catch (OverflowException ex)
-            {
-                var message = $"Overflow while normalizing checksum: {ex.Message}";
-                log?.Invoke(message);
-                return FileNormalizationResult.Failure(message, ex);
-            }
-            catch (Exception ex)
-            {
-                var message = $"Failed to normalize checksum: {ex.Message}";
-                log?.Invoke(message);
-                return FileNormalizationResult.Failure(message, ex);
+                stream.CopyTo(buffer);
+                return buffer.ToArray();
             }
         }
 
-        private static FileOwnershipResult GrantOwnership(string filePath, Action<string> log)
+        private static PatchOutcome ValidateAndReplace(byte[] buffer, List<PatchEntry> entries)
         {
-            try
+            foreach (var entry in entries)
             {
-                var psi = new ProcessStartInfo("cmd.exe")
-                {
-                    UseShellExecute = false,
-                    RedirectStandardInput = true,
-                    RedirectStandardOutput = true,
-                    CreateNoWindow = true
-                };
-
-                using (var process = new Process { StartInfo = psi })
-                {
-                    process.Start();
-                    using (var writer = process.StandardInput)
-                    {
-                        if (writer.BaseStream.CanWrite)
-                        {
-                            writer.WriteLine($"takeown /F \"{filePath}\"");
-                            writer.WriteLine($"icacls \"{filePath}\" /grant Administrators:F");
-                        }
-                    }
-
-                    process.WaitForExit();
-                }
-
-                var logMessage = $"Ownership updated for '{filePath}'.";
-                log?.Invoke(logMessage);
-                return FileOwnershipResult.Succeeded(logMessage);
+                if (entry.Offset >= buffer.Length)
+                    return PatchOutcome.Failure($"Line {entry.Line}: computed offset 0x{entry.Offset:X} is outside the target file.");
+                if (buffer[entry.Offset] != entry.Expected)
+                    return PatchOutcome.Failure($"Offset 0x{entry.Offset:X} mismatch: found 0x{buffer[entry.Offset]:X2}, expected 0x{entry.Expected:X2}.");
+                buffer[entry.Offset] = entry.Replacement;
             }
-            catch (Exception ex)
-            {
-                var message = $"Failed to update ownership: {ex.Message}";
-                log?.Invoke(message);
-                return FileOwnershipResult.Failure(message, ex);
-            }
+            return null;
         }
 
-        [DllImport("Imagehlp.dll")]
-        private static extern bool ImageRemoveCertificate(IntPtr handle, int index);
-
-        private readonly struct FileNormalizationResult
+        private readonly struct PatchEntry
         {
-            public FileNormalizationResult(bool success, string message, Exception error)
+            public PatchEntry(int offset, byte expected, byte replacement, int line)
             {
-                Success = success;
-                Message = message;
-                Error = error;
+                Offset = offset;
+                Expected = expected;
+                Replacement = replacement;
+                Line = line;
             }
-
-            public bool Success { get; }
-            public string Message { get; }
-            public Exception Error { get; }
-
-            public static FileNormalizationResult Succeeded(string message)
-            {
-                return new FileNormalizationResult(true, message, null);
-            }
-
-            public static FileNormalizationResult Failure(string message, Exception error = null)
-            {
-                return new FileNormalizationResult(false, message, error);
-            }
+            public int Offset { get; }
+            public byte Expected { get; }
+            public byte Replacement { get; }
+            public int Line { get; }
         }
 
-        private readonly struct FileOwnershipResult
-        {
-            public FileOwnershipResult(bool success, string message, Exception error)
-            {
-                Success = success;
-                Message = message;
-                Error = error;
-            }
-
-            public bool Success { get; }
-            public string Message { get; }
-            public Exception Error { get; }
-
-            public static FileOwnershipResult Succeeded(string message)
-            {
-                return new FileOwnershipResult(true, message, null);
-            }
-
-            public static FileOwnershipResult Failure(string message, Exception error)
-            {
-                return new FileOwnershipResult(false, message, error);
-            }
-        }
     }
 }
