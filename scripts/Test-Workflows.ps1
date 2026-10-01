@@ -25,6 +25,11 @@ if ([IO.File]::Exists($releasePath)) {
     foreach ($required in @('(?m)^  workflow_dispatch:', 'cancel-in-progress:\s*false', 'needs:\s*resolve', 'needs:\s*\[resolve, build\]', 'if: github.repository == ''ramhaidar/Win_1337_Apply_Patch''', 'ref: \$\{\{ needs.resolve.outputs.source_sha \}\}', 'persist-credentials:\s*false', 'if-no-files-found:\s*error', 'overwrite:\s*false')) {
         if ($release -notmatch $required) { throw "Manual release is missing source/promotion contract: $required" }
     }
+    foreach ($required in @('(?m)^\s+version:\s*\r?$', "(?m)^\s+description:.*leading 'v'", 'v2\.0, v2\.1, v2\.2', '-PendingTag', "sourceStatus !== 'pending-tag'", 'github\.rest\.git\.createRef', 'refs/tags/\$\{version\}', 'info\.default_branch')) {
+        if ($release -notmatch $required) { throw "Manual release is missing version/tag contract: $required" }
+    }
+    if ($release -match 'inputs\.tag') { throw 'Manual release still accepts a pre-existing tag input instead of a version.' }
+    if ($release -match "'tag-checkout'") { throw 'Manual release still expects a pre-existing tag checkout.' }
     if ([regex]::Matches($release, 'contents:\s*write').Count -ne 1) { throw 'Only draft promotion may have contents:write.' }
     $draft = $release.Substring($release.IndexOf("`n  draft:", [StringComparison]::Ordinal))
     foreach ($forbidden in @('actions/checkout@', '(?m)^\s+(run|shell):', 'scripts/', 'child_process', 'eval\(', 'exec\(')) {

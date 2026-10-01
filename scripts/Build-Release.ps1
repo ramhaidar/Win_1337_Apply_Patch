@@ -5,6 +5,7 @@ param(
     [Parameter(Mandatory)][datetimeoffset] $CommitTimeUtc,
     [Parameter(Mandatory)][string] $OutputDirectory,
     [switch] $LocalSnapshot,
+    [switch] $PendingTag,
     [scriptblock] $NativeRunner,
     [scriptblock] $VerificationRunner
 )
@@ -18,6 +19,7 @@ $Tag = Assert-ReleaseTag $Tag
 if ($SourceCommit -cnotmatch '\A[a-f0-9]{40}\z') { throw 'SourceCommit must be a full lowercase commit SHA.' }
 $hosted = $env:GITHUB_ACTIONS -ceq 'true'
 if ($hosted -and ($LocalSnapshot -or $NativeRunner -or $VerificationRunner)) { throw 'Hosted release builds cannot bypass source validation or verification.' }
+if ($LocalSnapshot -and $PendingTag) { throw 'A local snapshot has no tag to create; do not combine LocalSnapshot with PendingTag.' }
 if ([IO.Directory]::Exists($OutputDirectory) -or [IO.File]::Exists($OutputDirectory)) { throw 'OutputDirectory must not already exist.' }
 foreach ($file in @('global.json', 'Directory.Build.props', 'LICENSE', 'Win_1337_Patch.sln', 'Win_1337_Patch/Win_1337_Patch.csproj', 'Win_1337_Patch/packages.lock.json', 'Win_1337_Patch/packages.win-x64-framework-dependent.lock.json', 'Win_1337_Patch/packages.win-x64-self-contained.lock.json', 'Win_1337_Patch.Tests/packages.lock.json', 'scripts/Generate-Settings.ps1', 'scripts/Verify-Build.ps1')) {
     if (-not [IO.File]::Exists((Join-Path $RepositoryPath $file))) {
@@ -48,8 +50,11 @@ if (-not $LocalSnapshot) {
     if ($head.Trim() -cne $SourceCommit) { throw 'Checkout does not match the resolved source commit.' }
     $status = Invoke-Native git @('status', '--porcelain', '--untracked-files=all')
     if ($status.Trim()) { throw 'Official builds require an unchanged selected-tag checkout.' }
-    $resolved = Resolve-ReleaseTag -RepositoryPath $RepositoryPath -Tag $Tag
-    if ($resolved.Commit -cne $SourceCommit -or $resolved.CommitTimeUtc -ne $CommitTimeUtc.ToUniversalTime()) { throw 'Source tag identity or commit time does not match the checkout.' }
+    # PendingTag means the workflow creates the tag after building, so it cannot be resolved here yet.
+    if (-not $PendingTag) {
+        $resolved = Resolve-ReleaseTag -RepositoryPath $RepositoryPath -Tag $Tag
+        if ($resolved.Commit -cne $SourceCommit -or $resolved.CommitTimeUtc -ne $CommitTimeUtc.ToUniversalTime()) { throw 'Source tag identity or commit time does not match the checkout.' }
+    }
 }
 if ($VerificationRunner) { & $VerificationRunner $RepositoryPath }
 else {
@@ -85,7 +90,7 @@ try {
         sourceTag = $Tag
         sourceCommit = $SourceCommit
         commitTimeUtc = $CommitTimeUtc.ToUniversalTime().ToString('o', [Globalization.CultureInfo]::InvariantCulture)
-        sourceStatus = if ($LocalSnapshot) { 'local-snapshot' } else { 'tag-checkout' }
+        sourceStatus = if ($LocalSnapshot) { 'local-snapshot' } elseif ($PendingTag) { 'pending-tag' } else { 'tag-checkout' }
         workflowRef = if ($hosted) { $env:GITHUB_WORKFLOW_REF } else { $null }
         workflowSha = if ($hosted) { $env:GITHUB_WORKFLOW_SHA } else { $null }
         runUrl = if ($hosted) { "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/actions/runs/$($env:GITHUB_RUN_ID)" } else { $null }

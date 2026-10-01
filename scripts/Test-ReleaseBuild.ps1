@@ -105,7 +105,7 @@ try {
         Assert-True (($output -join "`n").Contains('NU1004')) 'Drift failed for a reason other than lock mismatch.'
         Assert-True ($before -ceq [Convert]::ToBase64String([IO.File]::ReadAllBytes($lock))) 'Failed locked restore modified its lock.'
     }
-    foreach ($scenario in @('success', 'verification-failure', 'publish-failure', 'wrong-sdk', 'missing-lock', 'missing-generator', 'existing-output', 'hosted-seam', 'wrong-head')) {
+    foreach ($scenario in @('success', 'pending-tag', 'pending-tag-combined', 'verification-failure', 'publish-failure', 'wrong-sdk', 'missing-lock', 'missing-generator', 'existing-output', 'hosted-seam', 'wrong-head')) {
         Test-Case "Release orchestration: $scenario" {
             $buildScript = Join-Path $PSScriptRoot 'Build-Release.ps1'
             Assert-True ([IO.File]::Exists($buildScript)) 'Build-Release command is missing.'
@@ -133,7 +133,10 @@ try {
                     $version = if ($scenario -eq 'wrong-sdk') { '10.0.203' } else { '10.0.401' }
                     return @{ ExitCode = 0; Output = $version }
                 }
-                if ($Command -eq 'git' -and $Arguments[0] -eq 'rev-parse') { return @{ ExitCode = 0; Output = ('b' * 40) } }
+                if ($Command -eq 'git' -and $Arguments[0] -eq 'rev-parse') {
+                    $head = if ($scenario -eq 'wrong-head') { 'b' * 40 } else { 'a' * 40 }
+                    return @{ ExitCode = 0; Output = $head }
+                }
                 if ($Arguments[0] -eq 'publish') {
                     if ($scenario -eq 'publish-failure') { return @{ ExitCode = 1; Output = 'fixture publish failed' } }
                     $destination = $Arguments[[Array]::IndexOf($Arguments, '--output') + 1]
@@ -152,7 +155,11 @@ try {
                 $env:GITHUB_ACTIONS = if ($scenario -eq 'hosted-seam') { 'true' } else { '' }
                 $errorText = ''
                 try {
-                    & $buildScript -RepositoryPath $root -Tag v2.4 -SourceCommit ('a' * 40) -CommitTimeUtc '2026-10-01T06:16:59Z' -OutputDirectory $outputDirectory -LocalSnapshot:($scenario -ne 'wrong-head') -NativeRunner $native -VerificationRunner $verification
+                    # Keep the original snapshot semantics for the pre-existing scenarios; only the
+                    # pending-tag and wrong-head scenarios intentionally exercise the checkout path.
+                    $snapshot = $scenario -notin @('pending-tag', 'wrong-head')
+                    $pending = $scenario -like 'pending-tag*'
+                    & $buildScript -RepositoryPath $root -Tag v2.4 -SourceCommit ('a' * 40) -CommitTimeUtc '2026-10-01T06:16:59Z' -OutputDirectory $outputDirectory -LocalSnapshot:$snapshot -PendingTag:$pending -NativeRunner $native -VerificationRunner $verification
                 }
                 catch { $errorText = $_.ToString() }
                 if ($scenario -eq 'success') {
@@ -167,6 +174,18 @@ try {
                     Assert-True ($provenance.sourceStatus -ceq 'local-snapshot' -and $provenance.sourceCommit -ceq ('a' * 40)) 'Snapshot was mislabeled as an official tagged build.'
                     Assert-True ($null -eq $provenance.runUrl) 'A hosted run was invented.'
                     Assert-True ($provenance.artifacts.Count -eq 2) 'Missing artifact provenance.'
+                    Import-Module (Join-Path $PSScriptRoot 'ReleaseArtifacts.psm1') -Force
+                    Test-ReleaseHashes $outputDirectory (Get-ReleaseAssetNames v2.4)
+                }
+                elseif ($scenario -eq 'pending-tag') {
+                    Assert-True ($errorText -ceq '') $errorText
+                    $gitCalls = @($calls | Where-Object { $_.Command -eq 'git' })
+                    Assert-True (@($gitCalls | Where-Object { $_.Arguments -contains 'rev-parse' }).Count -eq 1) 'Pending-tag build did not verify the checkout commit.'
+                    $publishes = @($calls | Where-Object { $_.Arguments[0] -eq 'publish' })
+                    Assert-True ($publishes.Count -eq 2) 'Pending-tag run did not build both modes.'
+                    $provenance = [IO.File]::ReadAllText((Join-Path $outputDirectory 'provenance.json')) | ConvertFrom-Json
+                    Assert-True ($provenance.sourceStatus -ceq 'pending-tag') 'Pending-tag provenance label is wrong.'
+                    Assert-True ($provenance.sourceTag -ceq 'v2.4' -and $provenance.sourceCommit -ceq ('a' * 40)) 'Pending-tag provenance identity is wrong.'
                     Import-Module (Join-Path $PSScriptRoot 'ReleaseArtifacts.psm1') -Force
                     Test-ReleaseHashes $outputDirectory (Get-ReleaseAssetNames v2.4)
                 }

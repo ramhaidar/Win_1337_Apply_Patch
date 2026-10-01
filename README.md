@@ -290,16 +290,16 @@ Windows CI verifies branch pushes and pull requests with read-only permissions. 
 
 ### Manual tagged draft releases
 
-Once the workflow is present on the repository's default branch, open **Actions → Manual tagged draft release → Run workflow** and supply an **existing tag containing this pipeline and its lock files**. Selecting a workflow branch does not select the application source: the tag input is independently resolved to its exact commit SHA. Older tags lacking this configuration fail without falling back to another branch. Normal commits/tag pushes never create releases.
+Once the workflow is present on the repository's default branch, open **Actions → Manual tagged draft release → Run workflow** and supply the **version to release**. The version **must include a leading `v`** — for example `v2.0`, `v2.1` or `v2.2`; a value without it is rejected before anything is built. Dispatch the workflow from the default branch: that branch's commit is the source, the version tag is created from the exact commit that was built, and no tag is created until the build has been verified. A version whose tag or release already exists is refused rather than overwritten, and normal commits/tag pushes never create releases.
 
-The workflow verifies/builds that SHA on Windows with SDK `10.0.401`, pins the release runtime to `10.0.12`, and retains:
+The workflow verifies/builds that commit on Windows with SDK `10.0.401`, pins the release runtime to `10.0.12`, and retains:
 
-- `Win_1337_Patch-<tag>-win-x64-framework-dependent.zip` — requires x64 .NET Desktop Runtime **10.0.12 or a compatible newer patch**.
-- `Win_1337_Patch-<tag>-win-x64-self-contained.zip` — bundles runtime `10.0.12`.
+- `Win_1337_Patch-<version>-win-x64-framework-dependent.zip` — requires x64 .NET Desktop Runtime **10.0.12 or a compatible newer patch**.
+- `Win_1337_Patch-<version>-win-x64-self-contained.zip` — bundles runtime `10.0.12`.
 - `SHA256SUMS` — SHA-256 for both ZIPs, not MD5.
 - `provenance.json` — source tag/SHA, workflow ref/SHA, run URL, toolchain, runtime modes and ZIP hashes.
 
-The draft job downloads and uploads **the same verified ZIP bytes**, without rebuilding or executing downloaded code. Only that job has release-write permission; it rejects moved/missing tags, existing drafts/releases, unexpected files and mismatched hashes/provenance. Failed uploads can leave a partial draft: inspect it manually rather than rerunning to overwrite assets. Review the run, provenance and assets before manually publishing the draft. The package tag does **not** change the handwritten assembly version. Keep `Win_1337_Patch/Properties/AssemblyInfo.cs` in sync with each release, currently `2.4.0.0`: `ReleaseIdentityTests` fails the test suite if the compiled version drifts from the released identity.
+The draft job creates the version tag at the built commit and then downloads and uploads **the same verified ZIP bytes**, without rebuilding or executing downloaded code. Only that job has release-write permission; it refuses an already-existing tag or release, unexpected files and mismatched hashes/provenance, and it verifies that the tag it created resolves to the built commit. Failed uploads can leave a partial draft: inspect it manually rather than rerunning to overwrite assets. Review the run, provenance and assets before manually publishing the draft. The package version does **not** change the handwritten assembly version. Keep `Win_1337_Patch/Properties/AssemblyInfo.cs` in sync with each release, currently `2.4.0.0`: `ReleaseIdentityTests` fails the test suite if the compiled version drifts from the released identity.
 
 ### Rebuild and verify integrity
 
