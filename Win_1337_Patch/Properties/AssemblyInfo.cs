@@ -35,3 +35,4 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyVersion("2.3.0.0")]
 [assembly: AssemblyFileVersion("2.3.0.0")]
 [assembly: System.Runtime.CompilerServices.InternalsVisibleTo("Win_1337_Patch.Tests")]
+[assembly: System.Runtime.Versioning.SupportedOSPlatform("windows7.0")]

@@ -108,8 +108,17 @@ namespace Win_1337_Patch
 
         internal static string BuildScheduledCommandLine(PatchScheduleDescriptor descriptor)
         {
+            return BuildScheduledCommandLine(descriptor, Application.ExecutablePath);
+        }
+
+        /// <summary>
+        /// Builds the scheduled command line from an explicit executable path so
+        /// command construction is deterministic and can be verified directly.
+        /// </summary>
+        internal static string BuildScheduledCommandLine(PatchScheduleDescriptor descriptor, string executablePath)
+        {
             var builder = new StringBuilder();
-            builder.Append(QuoteArgument(Application.ExecutablePath));
+            builder.Append(QuoteArgument(executablePath));
             builder.Append(" -patch ");
             builder.Append(QuoteArgument(descriptor.PatchFilePath));
             builder.Append(" ");
