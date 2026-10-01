@@ -13,6 +13,12 @@ namespace Win_1337_Patch
 
         public Form1()
         {
+            // Modern .NET replaces the classic Microsoft Sans Serif 8.25pt default font
+            // (Segoe UI 9pt on newer WinForms builds). Restoring the original font before
+            // InitializeComponent lets the designer-generated layout scale from its
+            // original 6x13 AutoScaleDimensions baseline instead of the modern default.
+            Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F);
+
             InitializeComponent();
             var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             string ver = "v" + version.Major + "." + version.Minor;

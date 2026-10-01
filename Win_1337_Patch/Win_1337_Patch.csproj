@@ -1,127 +1,54 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
-    <PropertyGroup>
-      <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-      <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-      <ProjectGuid>{97153568-54C0-4295-9ABD-20358B78A5BB}</ProjectGuid>
-      <OutputType>WinExe</OutputType>
-      <RootNamespace>Win_1337_Patch</RootNamespace>
-      <AssemblyName>Win_1337_Patch</AssemblyName>
-      <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
-      <FileAlignment>512</FileAlignment>
-      <Deterministic>true</Deterministic>
-      <TargetFrameworkProfile />
-      <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
-      <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
-    </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <PlatformTarget>AnyCPU</PlatformTarget>
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
-  </PropertyGroup>
+<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <LangVersion>14.0</LangVersion>
+    <RootNamespace>Win_1337_Patch</RootNamespace>
+    <AssemblyName>Win_1337_Patch</AssemblyName>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <ApplicationIcon>vampire.ico</ApplicationIcon>
-  </PropertyGroup>
-  <PropertyGroup>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <FileAlignment>512</FileAlignment>
+    <Deterministic>true</Deterministic>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
   </PropertyGroup>
-    <ItemGroup>
-      <Reference Include="System" />
-      <Reference Include="System.Core" />
-      <Reference Include="System.Xml.Linq" />
-      <Reference Include="System.Data.DataSetExtensions" />
-      <Reference Include="Microsoft.CSharp" />
-      <Reference Include="System.Data" />
-      <Reference Include="System.Deployment" />
-      <Reference Include="System.Drawing" />
-      <Reference Include="System.Windows.Forms" />
-      <Reference Include="System.Xml" />
-      <Reference Include="System.Resources.Extensions">
-        <HintPath>$(NuGetPackageRoot)system.resources.extensions\7.0.0\lib\net462\System.Resources.Extensions.dll</HintPath>
-        <Private>true</Private>
-      </Reference>
-      <Reference Include="System.Memory">
-        <HintPath>$(NuGetPackageRoot)system.memory\4.5.5\lib\net461\System.Memory.dll</HintPath>
-        <Private>true</Private>
-      </Reference>
-      <Reference Include="System.Buffers">
-        <HintPath>$(NuGetPackageRoot)system.buffers\4.5.1\lib\net461\System.Buffers.dll</HintPath>
-        <Private>true</Private>
-      </Reference>
-      <Reference Include="System.Numerics.Vectors">
-        <HintPath>$(NuGetPackageRoot)system.numerics.vectors\4.5.0\lib\net46\System.Numerics.Vectors.dll</HintPath>
-        <Private>true</Private>
-      </Reference>
-      <Reference Include="System.Runtime.CompilerServices.Unsafe">
-        <HintPath>$(NuGetPackageRoot)system.runtime.compilerservices.unsafe\6.0.0\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
-        <Private>true</Private>
-      </Reference>
-    </ItemGroup>
-    <ItemGroup>
-      <Compile Include="Ellipsis.cs" />
-      <Compile Include="1337.cs">
-        <SubType>Form</SubType>
-      </Compile>
-      <Compile Include="1337.Designer.cs">
-        <DependentUpon>1337.cs</DependentUpon>
-      </Compile>
-      <Compile Include="mCheckSum.cs" />
-      <Compile Include="PatchEngine.cs" />
-      <Compile Include="PatchTargetResolver.cs" />
-      <Compile Include="ScheduledPatchManager.cs" />
-      <Compile Include="Program.cs" />
-    <Compile Include="Properties\AssemblyInfo.cs" />
-    <EmbeddedResource Include="1337.resx">
+
+  <ItemGroup>
+    <EmbeddedResource Update="1337.resx">
       <DependentUpon>1337.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Properties\Resources.resx">
+    <EmbeddedResource Update="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
       <SubType>Designer</SubType>
     </EmbeddedResource>
-    <Compile Include="Properties\Resources.Designer.cs">
+    <None Update="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Update="1337.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Update="1337.Designer.cs">
+      <DependentUpon>1337.cs</DependentUpon>
+    </Compile>
+    <Compile Update="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
-    <None Include="app.config" />
-    <None Include="app.manifest" />
-    <None Include="Properties\Settings.settings">
-      <Generator>SettingsSingleFileGenerator</Generator>
-      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
-    </None>
-    <Compile Include="Properties\Settings.Designer.cs">
+    <Compile Update="Properties\Settings.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
   </ItemGroup>
-  <ItemGroup>
-    <Content Include="vampire.ico" />
-  </ItemGroup>
-    <ItemGroup>
-      <PackageReference Include="System.Resources.Extensions" Version="7.0.0" />
-      <PackageReference Include="System.Memory" Version="4.5.5" />
-      <PackageReference Include="System.Buffers" Version="4.5.1" />
-      <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
-      <PackageReference Include="System.Numerics.Vectors" Version="4.5.0" />
-    </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+
 </Project>
