@@ -11,13 +11,14 @@ namespace Win_1337_Patch
     /// </summary>
     internal sealed class PatchScheduleDescriptor
     {
-        public PatchScheduleDescriptor(string patchFilePath, string targetFilePath, bool fixOffset, bool createBackup, bool takeOwnership)
+        public PatchScheduleDescriptor(string patchFilePath, string targetFilePath, bool fixOffset, bool createBackup, bool takeOwnership, bool elevate = false)
         {
             PatchFilePath = patchFilePath ?? throw new ArgumentNullException(nameof(patchFilePath));
             TargetFilePath = targetFilePath ?? throw new ArgumentNullException(nameof(targetFilePath));
             FixFileOffset = fixOffset;
             CreateBackup = createBackup;
             TakeOwnership = takeOwnership;
+            Elevate = elevate;
         }
 
         public string PatchFilePath { get; }
@@ -25,6 +26,7 @@ namespace Win_1337_Patch
         public bool FixFileOffset { get; }
         public bool CreateBackup { get; }
         public bool TakeOwnership { get; }
+        public bool Elevate { get; }
     }
 
     /// <summary>
@@ -82,7 +84,8 @@ namespace Win_1337_Patch
             if (!File.Exists(targetPath))
                 return ScheduledPatchResult.Failure($"Target file not found: {targetPath}");
 
-            var commandLine = BuildScheduledCommandLine(new PatchScheduleDescriptor(patchPath, targetPath, descriptor.FixFileOffset, descriptor.CreateBackup, descriptor.TakeOwnership));
+            var commandLine = BuildScheduledCommandLine(new PatchScheduleDescriptor(patchPath, targetPath,
+                descriptor.FixFileOffset, descriptor.CreateBackup, descriptor.TakeOwnership, descriptor.Elevate));
 
             try
             {
@@ -97,7 +100,7 @@ namespace Win_1337_Patch
                     log?.Invoke($"Scheduled run-once entry '{entryName}'.");
                     log?.Invoke($"RunOnce command: {commandLine}");
 
-                    return ScheduledPatchResult.SuccessResult($"Patch scheduled for next boot (entry '{entryName}').", entryName, commandLine);
+                    return ScheduledPatchResult.SuccessResult($"Patch scheduled for next login (entry '{entryName}'). UAC consent is still required if elevation was requested and access requires it.", entryName, commandLine);
                 }
             }
             catch (Exception ex)
@@ -133,6 +136,9 @@ namespace Win_1337_Patch
             if (descriptor.TakeOwnership)
                 builder.Append(" -takeownership");
 
+            if (descriptor.Elevate)
+                builder.Append(" -elevate");
+
             builder.Append(" -scheduledrun");
             return builder.ToString();
         }
@@ -142,8 +148,7 @@ namespace Win_1337_Patch
             if (value == null)
                 throw new ArgumentNullException(nameof(value));
 
-            var escaped = value.Replace("\"", "\\\"");
-            return $"\"{escaped}\"";
+            return ElevatedPatchLauncher.QuoteWindowsArgument(value);
         }
     }
 }

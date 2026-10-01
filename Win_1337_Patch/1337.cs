@@ -1,7 +1,7 @@
-using Microsoft.Win32;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Win_1337_Patch
@@ -10,9 +10,20 @@ namespace Win_1337_Patch
     {
         private string exe = String.Empty;
         private string f1337 = String.Empty;
+        private readonly PatchElevationCoordinator coordinator;
+        private readonly IGuiPatchSettings settings;
+        private readonly Func<PatchRequest, Task<bool>> confirmElevation;
+        private readonly Func<PatchRequest, bool> confirmOwnership;
+        private bool initializingPreferences = true;
+        private bool patchInProgress;
 
-        public Form1()
+        internal Form1(PatchElevationCoordinator coordinator, IGuiPatchSettings settings,
+            Func<PatchRequest, Task<bool>> confirmElevation, Func<PatchRequest, bool> confirmOwnership)
         {
+            this.coordinator = coordinator ?? throw new ArgumentNullException(nameof(coordinator));
+            this.settings = settings ?? throw new ArgumentNullException(nameof(settings));
+            this.confirmElevation = confirmElevation ?? ConfirmElevationAsync;
+            this.confirmOwnership = confirmOwnership ?? ConfirmOwnership;
             // Modern .NET replaces the classic Microsoft Sans Serif 8.25pt default font
             // (Segoe UI 9pt on newer WinForms builds). Restoring the original font before
             // InitializeComponent lets the designer-generated layout scale from its
@@ -20,14 +31,92 @@ namespace Win_1337_Patch
             Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F);
 
             InitializeComponent();
+            InitializeOwnershipOption();
+            cchangeOwnership.Text = "Ownership";
+            toolTip1.SetToolTip(cchangeOwnership,
+                "Advanced: allow ownership/permission changes only if normal administrator access fails. Requires confirmation for this target.");
             var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
             string ver = "v" + version.Major + "." + version.Minor;
             this.Text = "Win 1337 Apply Patch File " + ver + " Fork By @ramhaidar";
             linkdfox.Text = ver + " Fork Version";
         }
 
+        public Form1() : this(PatchElevationCoordinator.CreateDefault(), new GuiPatchSettings(), null, null) { }
+
+        internal void InitializeOwnershipOption()
+        {
+            cchangeOwnership.Checked = false;
+        }
+
+        internal void InitializePreferences()
+        {
+            initializingPreferences = true;
+            try
+            {
+                cfileoffsett.Checked = settings.FixOffset;
+                controlloBackup.Checked = settings.CreateBackup;
+                InitializeOwnershipOption();
+            }
+            finally
+            {
+                initializingPreferences = false;
+            }
+        }
+
+        internal async Task<PatchOutcome> ExecuteGuiPatchAsync(string patchPath, string targetPath)
+        {
+            if (patchInProgress)
+                return PatchOutcome.Failure("A patch operation is already in progress.");
+            patchInProgress = true;
+            SetPatchControlsEnabled(false);
+            try
+            {
+                var request = new PatchRequest(patchPath, targetPath, cfileoffsett.Checked,
+                    controlloBackup.Checked, cchangeOwnership.Checked);
+                if (request.TakeOwnership && !confirmOwnership(request))
+                    return PatchOutcome.Failure("Ownership authorization cancelled. The target was not modified.");
+                return await coordinator.ApplyAsync(request, allowElevation: true, elevatedWorker: false, confirmElevation);
+            }
+            finally
+            {
+                InitializeOwnershipOption();
+                patchInProgress = false;
+                SetPatchControlsEnabled(true);
+            }
+        }
+
+        private void SetPatchControlsEnabled(bool enabled)
+        {
+            Patch.Enabled = enabled;
+            btnSelect1337.Enabled = enabled;
+            btnSelectExe.Enabled = enabled;
+            cfileoffsett.Enabled = enabled;
+            controlloBackup.Enabled = enabled;
+            cchangeOwnership.Enabled = enabled;
+            t1337.AllowDrop = enabled;
+        }
+
+        private Task<bool> ConfirmElevationAsync(PatchRequest request)
+        {
+            return Task.FromResult(MessageBox.Show(this,
+                $"Administrator access is required for this patch operation:\n{Path.GetFullPath(request.TargetFilePath)}\n\nRun one patch operation as administrator? This window will remain unelevated.",
+                "Administrator operation", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) == DialogResult.Yes);
+        }
+
+        private bool ConfirmOwnership(PatchRequest request)
+        {
+            return MessageBox.Show(this,
+                $"Allow ownership and permission changes for this file only if normal elevated access fails?\n{Path.GetFullPath(request.TargetFilePath)}\n\nThese changes persist and do not bypass file locks. This permission applies only to this operation.",
+                "Advanced ownership fallback", MessageBoxButtons.YesNo, MessageBoxIcon.Warning,
+                MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        }
+
         private void set()
         {
+            if (patchInProgress)
+                return;
+            InitializeOwnershipOption();
             try
             {
                 t1337.Text = Ellipsis.Compact(f1337, t1337, EllipsisFormat.Path);
@@ -86,6 +175,7 @@ namespace Win_1337_Patch
             if (string.IsNullOrWhiteSpace(path))
                 return;
 
+            InitializeOwnershipOption();
             exe = path;
             texe.Text = Ellipsis.Compact(path, texe, EllipsisFormat.Path);
             toolTip1.SetToolTip(texe, path);
@@ -93,6 +183,8 @@ namespace Win_1337_Patch
 
         private void t1337_DragDrop(object sender, DragEventArgs e)
         {
+            if (patchInProgress)
+                return;
             try
             {
                 f1337 = ((string[])e.Data.GetData(DataFormats.FileDrop, false))[0];
@@ -191,7 +283,7 @@ namespace Win_1337_Patch
             return true;
         }
 
-        private void Patch_Click(object sender, EventArgs e)
+        private async void Patch_Click(object sender, EventArgs e)
         {
             if (f1337 == String.Empty)
             {
@@ -200,7 +292,7 @@ namespace Win_1337_Patch
             }
             try
             {
-                DFoX_Patch();
+                await DFoX_Patch();
             }
             catch (Exception ex)
             {
@@ -208,7 +300,7 @@ namespace Win_1337_Patch
             }
         }
 
-        private void DFoX_Patch()
+        private async Task DFoX_Patch()
         {
             if (string.IsNullOrWhiteSpace(f1337) || string.IsNullOrWhiteSpace(exe))
             {
@@ -222,8 +314,7 @@ namespace Win_1337_Patch
                 return;
             }
 
-            var request = new PatchRequest(f1337, exe, cfileoffsett.Checked, controlloBackup.Checked, cchangeOwnership.Checked);
-            var outcome = PatchEngine.ApplyPatch(request);
+            var outcome = await ExecuteGuiPatchAsync(f1337, exe);
 
             if (outcome.Success)
                 MessageBox.Show(outcome.Message, "Info...", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -235,9 +326,7 @@ namespace Win_1337_Patch
         {
             try
             {
-                cfileoffsett.Checked = (bool)Properties.Settings.Default["fixoffset"];
-                controlloBackup.Checked = (bool)Properties.Settings.Default["backup"];
-                cchangeOwnership.Checked = (bool)Properties.Settings.Default["changeOwnership"];
+                InitializePreferences();
 
                 exe = String.Empty;
                 f1337 = String.Empty;
@@ -254,10 +343,12 @@ namespace Win_1337_Patch
 
         private void cfileoffsett_CheckedChanged(object sender, EventArgs e)
         {
+            if (initializingPreferences)
+                return;
             try
             {
-                Properties.Settings.Default["fixoffset"] = cfileoffsett.Checked;
-                Properties.Settings.Default.Save();
+                settings.FixOffset = cfileoffsett.Checked;
+                settings.Save();
             }
             catch (Exception ex)
             {
@@ -267,10 +358,12 @@ namespace Win_1337_Patch
 
         private void controlloBackup_CheckedChanged(object sender, EventArgs e)
         {
+            if (initializingPreferences)
+                return;
             try
             {
-                Properties.Settings.Default["backup"] = controlloBackup.Checked;
-                Properties.Settings.Default.Save();
+                settings.CreateBackup = controlloBackup.Checked;
+                settings.Save();
             }
             catch (Exception ex)
             {
@@ -280,15 +373,7 @@ namespace Win_1337_Patch
 
         private void cchangeOwnership_CheckedChanged(object sender, EventArgs e)
         {
-            try
-            {
-                Properties.Settings.Default["changeOwnership"] = cchangeOwnership.Checked;
-                Properties.Settings.Default.Save();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"An error occurred while saving change ownership setting: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
+            // Ownership consent is deliberately not persisted across operations or launches.
         }
 
         private void linkdfox_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
