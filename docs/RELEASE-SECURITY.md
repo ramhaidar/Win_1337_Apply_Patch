@@ -1,6 +1,6 @@
 # Release signing and antivirus false-positive review
 
-**Current status:** the patcher binaries are unsigned. No signing enrollment, certificate acquisition, antivirus submission or issue comment has been made as part of this work. The manual tagged draft-release pipeline has passed local verification; hosted Actions execution and an official rebuild from a tag that contains it remain deferred. Assembly version is still `2.3.0.0`.
+**Current status:** the patcher binaries are unsigned. No signing enrollment, certificate acquisition, antivirus submission or issue comment has been made as part of this work. The manual tagged draft-release pipeline has passed local verification; hosted Actions execution and an official rebuild from a tag that contains it remain deferred. Assembly version is `2.4.0.0`.
 
 Use the [release/rebuild instructions](../README.md#manual-tagged-draft-releases) to establish the exact source, build run and SHA-256 before distribution or vendor review. This utility intentionally rewrites executable files. Vendors may classify it as a patcher/HackTool even without malicious behavior; neither signing nor a low VirusTotal detection count proves safety.
 

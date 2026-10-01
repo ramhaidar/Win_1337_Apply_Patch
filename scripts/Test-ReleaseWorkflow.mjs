@@ -38,7 +38,7 @@ function fixture(options = {}) {
         commitTimeUtc: time, sourceStatus: 'tag-checkout',
         workflowRef: `${repository}/.github/workflows/release.yml@refs/heads/main`,
         workflowSha, runUrl: `https://github.com/${repository}/actions/runs/123`,
-        sdkVersion: '10.0.401', runtimeVersion: '10.0.12', assemblyVersion: '2.3.0.0',
+        sdkVersion: '10.0.401', runtimeVersion: '10.0.12', assemblyVersion: '2.4.0.0',
         publishModes: ['framework-dependent', 'self-contained'], artifacts,
     }));
     const calls = [];
