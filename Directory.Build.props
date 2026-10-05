@@ -3,6 +3,25 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
 
+  <!--
+    Static analysis / linting policy, applied to every project in the repository.
+
+    The built-in .NET (Roslyn) analyzers run for all configurations so the same
+    diagnostics appear in the IDE, in an ordinary Debug build, and in the Release
+    quality build. Code style rules from .editorconfig are enforced at build time
+    as well, so `dotnet build` and `dotnet format` verifier agree.
+
+    Analyzer warnings only fail the build through the existing ReleaseBuild=true
+    TreatWarningsAsErrors switch below; this block does not add new suppression
+    or demotion behavior.
+  -->
+  <PropertyGroup>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(ReleaseBuild)' == 'true'">
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
     <Deterministic>true</Deterministic>

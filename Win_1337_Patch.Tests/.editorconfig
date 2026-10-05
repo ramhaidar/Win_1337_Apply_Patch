@@ -1,0 +1,16 @@
+# Project-local analyzer configuration for the MSTest project.
+#
+# This file is intentionally NOT `root = true`: it inherits every setting from
+# the repository root .editorconfig and only narrows rules for test code.
+#
+# Reference: https://learn.microsoft.com/dotnet/fundamentals/code-analysis/configuration-files
+
+[*.cs]
+# CA1861 (avoid constant arrays as arguments) recommends hoisting repeated array
+# literals into `static readonly` fields. In test methods the array literals are
+# written once per test and passed straight into the code under test, so the
+# suggested allocation saving is meaningless here and hoisting them would only
+# make each test's arrange section harder to read. Kept at `suggestion` (an IDE
+# hint) rather than suppressed outright so a genuine hot-path case in test
+# infrastructure would still be visible.
+dotnet_diagnostic.CA1861.severity = suggestion
