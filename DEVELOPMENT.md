@@ -38,10 +38,10 @@ Expected result: `True`. You do not need an administrator terminal to build or r
 
 ```powershell
 dotnet restore .\Win_1337_Patch.sln --locked-mode
-dotnet build .\Win_1337_Patch.sln --configuration Release --no-restore
+dotnet build .\Win_1337_Patch.sln --configuration Release --no-restore -p:ReleaseBuild=true
 ```
 
-This verifies dependency locks and compiles both the app and tests. Wait for **Build succeeded** before continuing. For all CI/release checks in one command, use `pwsh -NoProfile -File scripts/Verify-Build.ps1`.
+This verifies dependency locks and compiles both the app and tests. `-p:ReleaseBuild=true` enables the built-in .NET analyzers, deterministic source paths, and warnings-as-errors, so this single command is also the repository's lint and type-check gate. Wait for **Build succeeded** (0 warnings, 0 errors) before continuing. For every CI/release check in one command, use `pwsh -NoProfile -File scripts/Verify-Build.ps1`.
 
 The executable is created at:
 
@@ -57,7 +57,7 @@ Keep the other files in this folder beside the executable; do not move just the 
 dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj --configuration Release --no-build
 ```
 
-`--no-build` reuses the Release build from step 3. The current suite contains **77 tests**, all passing in local verification.
+`--no-build` reuses the Release build from step 3. The current suite contains **79 tests**, all passing in local verification.
 
 The tests use disposable temporary files and read-only configuration checks. They do not patch system files, change ownership, write RunOnce registry entries, save your GUI preferences, or display the app window.
 
@@ -100,6 +100,50 @@ dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj --configuration R
 ```
 
 If you prefer Debug builds, replace `Release` with `Debug` in the build/test commands and launch from `bin\Debug\net10.0-windows` instead.
+
+## Quality gates (formatting, linting, type check, tests)
+
+Enabling the .NET analyzers repository-wide, their analysis level, and code-style enforcement live in `Directory.Build.props`; the style rules and the reasons for the few narrow analyzer opt-outs live in the root `.editorconfig`. `pwsh -NoProfile -File scripts/Verify-Build.ps1` runs all of the gates below in order and is the single local/CI entry point, so use it when you want everything at once.
+
+### Format
+
+Apply the repository style to the whole solution:
+
+```powershell
+dotnet format .\Win_1337_Patch.sln
+```
+
+### Check formatting (non-mutating)
+
+```powershell
+dotnet format .\Win_1337_Patch.sln --verify-no-changes --no-restore
+```
+
+This exits with a non-zero code when tracked source is not correctly formatted; drop `--no-restore` if you have not restored yet. CI runs this exact gate.
+
+### Lint / static analysis and type check
+
+```powershell
+dotnet build .\Win_1337_Patch.sln --configuration Release --no-restore -p:ReleaseBuild=true
+```
+
+The C# compiler is the type checker, so this clean compile of the full solution (app and tests) is the type-check gate. `-p:ReleaseBuild=true` adds `TreatWarningsAsErrors=true`, so analyzer and compiler warnings fail the build; it does not launch the GUI or publish anything.
+
+### Tests
+
+```powershell
+dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj --configuration Release --no-build --no-restore
+```
+
+`--no-build` reuses the Release build from the gate above; omit it to build first. This is the same MSTest suite documented in step 4 and in [README.md](README.md#testing).
+
+### Full verification
+
+```powershell
+pwsh -NoProfile -File scripts/Verify-Build.ps1
+```
+
+Runs the exact SDK check, locked restore, repository settings/release/workflow fixtures, the formatting verify step, the analyzer/type-check Release build, and the test suite, stopping at the first failure. GitHub Actions runs this same command, so local and hosted results do not drift.
 
 ## Publish a folder to test on another PC
 

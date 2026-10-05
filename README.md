@@ -101,8 +101,10 @@ Windows version support follows the official [.NET support policy](https://dotne
 3. Build the solution in Release configuration:
 
    ```powershell
-   dotnet build .\Win_1337_Patch.sln --configuration Release
+   dotnet build .\Win_1337_Patch.sln --configuration Release --no-restore -p:ReleaseBuild=true
    ```
+
+   `-p:ReleaseBuild=true` enables the .NET analyzers, deterministic source paths and warnings-as-errors, so a clean build also satisfies the lint and type-check gates described under [Common Commands](#common-commands).
 
    Alternatively, open `Win_1337_Patch.sln` in Visual Studio and build the `Release | Any CPU` solution configuration.
 
@@ -245,14 +247,15 @@ Run these from the repository root in PowerShell:
 |---|---|---|
 | Restore | `dotnet restore .\Win_1337_Patch.sln --locked-mode` | Verifies committed dependency locks on SDK 10.0.401 |
 | Build Debug | `dotnet build .\Win_1337_Patch.sln --configuration Debug` | Supported with the .NET 10 SDK; no targeting pack needed |
-| Build Release | `dotnet build .\Win_1337_Patch.sln --configuration Release` | Verified working; builds clean with 0 warnings/errors on .NET SDK 10.0.401 |
-| Run all tests | `dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj --configuration Release` | Windows required; 77 tests passed in the least-privilege verification |
+| Build Release | `dotnet build .\Win_1337_Patch.sln --configuration Release --no-restore -p:ReleaseBuild=true` | Enables the .NET analyzers with deterministic source paths and warnings-as-errors; builds clean with 0 warnings/errors on .NET SDK 10.0.401 |
+| Run all tests | `dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj --configuration Release --no-build --no-restore` | Windows required; 79 tests passed after the quality-gate build |
 | Run focused tests | `dotnet test .\Win_1337_Patch.Tests\Win_1337_Patch.Tests.csproj --filter "FullyQualifiedName~PatchEngineTests"` | Supported by the MSTest test runner |
-| Verify CI/release inputs | `pwsh -NoProfile -File .\scripts\Verify-Build.ps1` | Locked restore, settings/release/workflow fixtures, clean Release build and full MSTest suite |
+| Verify all quality gates | `pwsh -NoProfile -File .\scripts\Verify-Build.ps1` | Exact SDK, locked restore, settings/release/workflow fixtures, formatting, analyzer/type-check Release build and the full MSTest suite |
 | Compare local rebuilds | `pwsh -NoProfile -File .\scripts\Test-ReproducibleRelease.ps1` | Two disposable source roots; compares all extracted files and both ZIPs without launching the app |
-| Lint | — | No lint command/configuration was found in the repository |
-| Format | — | No formatter command/configuration was found in the repository |
-| Typecheck | — | No separate typecheck command was found; compilation is the available C# check |
+| Lint / static analysis | `dotnet build .\Win_1337_Patch.sln --configuration Release --no-restore -p:ReleaseBuild=true` | Built-in .NET analyzers at `AnalysisMode=Recommended`, configured in the root `.editorconfig`; Release treats their warnings as errors |
+| Format (apply) | `dotnet format .\Win_1337_Patch.sln` | Applies the root `.editorconfig`; add `--no-restore` after a restore |
+| Format (verify) | `dotnet format .\Win_1337_Patch.sln --verify-no-changes` | Non-mutating; exits non-zero when tracked source is not formatted |
+| Type check | `dotnet build .\Win_1337_Patch.sln --configuration Release --no-restore -p:ReleaseBuild=true` | Compilation is the C# type check; covers the app and the tests and runs analyzers |
 
 Visual Studio users can run the full suite through **Test > Run All Tests**.
 
@@ -393,7 +396,13 @@ A framework-dependent build or publish requires the **.NET Desktop Runtime 10.0 
 1. Create a focused branch for your change.
 2. Keep changes limited to the requested behavior and preserve the SDK-style project structure, the shared `PatchEngine` design, and the .NET 10 target.
 3. Add or update MSTest coverage for patch validation, CLI parsing, target resolution, scheduling, or runtime-compatibility changes.
-4. Run the solution build and the relevant test project with the .NET 10 SDK before opening a pull request.
+4. Format the solution (`dotnet format .\Win_1337_Patch.sln`) and run the full quality-gate entry point before opening a pull request:
+
+   ```powershell
+   pwsh -NoProfile -File .\scripts\Verify-Build.ps1
+   ```
+
+   It checks formatting, runs the built-in .NET analyzers as part of a Release build with warnings-as-errors, type-checks the whole solution, and runs the MSTest suite. Style and analyzer severity live in the root `.editorconfig`; keep changes there narrow and explained.
 5. Do not include target binaries, private patch files, backups, `bin`/`obj`/publish output, or user-specific settings in commits.
 
 No separate `CONTRIBUTING.md` was found. For issues and pull requests, use the repository's [GitHub project](https://github.com/ramhaidar/Win_1337_Apply_Patch).
