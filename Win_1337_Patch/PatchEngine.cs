@@ -89,10 +89,8 @@ namespace Win_1337_Patch
 
         internal static PatchOutcome ApplyPatch(PatchRequest request, PatchExecutionContext context, Action<string> log = null)
         {
-            if (request == null)
-                throw new ArgumentNullException(nameof(request));
-            if (context == null)
-                throw new ArgumentNullException(nameof(context));
+            ArgumentNullException.ThrowIfNull(request);
+            ArgumentNullException.ThrowIfNull(context);
 
             var stage = PatchStage.None;
             string failurePath = null;
@@ -124,7 +122,7 @@ namespace Win_1337_Patch
                 }
 
                 var header = lines[0].Trim();
-                if (!header.StartsWith(">", StringComparison.Ordinal))
+                if (!header.StartsWith('>'))
                     return PatchOutcome.Failure("Patch file does not start with a valid header.");
 
                 var expectedName = header.Substring(1).Trim();

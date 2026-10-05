@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -8,14 +9,14 @@ namespace Win_1337_Patch
     {
         public string Pein = string.Empty;
         public string Pefi = string.Empty;
-        public string TrovaCheckSum(string sFilePath)
+        public static string TrovaCheckSum(string sFilePath)
         {
             if (File.Exists(sFilePath))
             {
                 uint AttualeHeaderSum, CheckSumCalcolato = 0; uint uRet = 0;
                 uRet = MapFileAndCheckSum(sFilePath, out AttualeHeaderSum, out CheckSumCalcolato);
                 if (uRet == 0x00)
-                    return AttualeHeaderSum.ToString("X8") + "-" + CheckSumCalcolato.ToString("X8");
+                    return AttualeHeaderSum.ToString("X8", CultureInfo.InvariantCulture) + "-" + CheckSumCalcolato.ToString("X8", CultureInfo.InvariantCulture);
                 else return "0";
             }
             else return "";
@@ -28,11 +29,11 @@ namespace Win_1337_Patch
             IMAGE_DOS_HEADER DHD = new IMAGE_DOS_HEADER();
             IMAGE_NT_HEADERS NHD = new IMAGE_NT_HEADERS();
 
-            long iPointer = 0; 
+            long iPointer = 0;
             uint uOriginal = 0;
             uint uRecalculated = 0;
             uint uRet = 0;
-            byte[] fBytes = new byte[0];
+            byte[] fBytes = Array.Empty<byte>();
 
             try
             {
@@ -51,10 +52,10 @@ namespace Win_1337_Patch
             GCHandle gHandle = GCHandle.Alloc(fBytes, GCHandleType.Pinned);
             checked
             {
-                iPointer = gHandle.AddrOfPinnedObject().ToInt64(); 
+                iPointer = gHandle.AddrOfPinnedObject().ToInt64();
             }
-            DHD = (IMAGE_DOS_HEADER)Marshal.PtrToStructure(new IntPtr(iPointer), typeof(IMAGE_DOS_HEADER));
-            NHD = (IMAGE_NT_HEADERS)Marshal.PtrToStructure(new IntPtr(iPointer + DHD.e_lfanew), typeof(IMAGE_NT_HEADERS));
+            DHD = (IMAGE_DOS_HEADER)Marshal.PtrToStructure<IMAGE_DOS_HEADER>(new IntPtr(iPointer));
+            NHD = (IMAGE_NT_HEADERS)Marshal.PtrToStructure<IMAGE_NT_HEADERS>(new IntPtr(iPointer + DHD.e_lfanew));
             gHandle.Free();
 
             if (NHD.Signature != 17744 || DHD.e_magic != 23117) { return false; }
@@ -65,8 +66,8 @@ namespace Win_1337_Patch
             {
                 if (uOriginal == uRecalculated)
                 {
-                    Pein = uOriginal.ToString("X8");
-                    Pefi = uRecalculated.ToString("X8");
+                    Pein = uOriginal.ToString("X8", CultureInfo.InvariantCulture);
+                    Pefi = uRecalculated.ToString("X8", CultureInfo.InvariantCulture);
                     return true;
                 }
             }
@@ -76,8 +77,8 @@ namespace Win_1337_Patch
                 Pefi = string.Empty;
                 return false;
             }
-            Pein = uOriginal.ToString("X8");
-            Pefi = uRecalculated.ToString("X8");
+            Pein = uOriginal.ToString("X8", CultureInfo.InvariantCulture);
+            Pefi = uRecalculated.ToString("X8", CultureInfo.InvariantCulture);
             NHD.OptionalHeader.CheckSum = uRecalculated;
 
             byte[] bNHD = getBytes_(NHD);
@@ -102,7 +103,7 @@ namespace Win_1337_Patch
             return true;
         }
 
-        private byte[] getBytes_(object oObject)
+        private static byte[] getBytes_(object oObject)
         {
             int iSize = Marshal.SizeOf(oObject);
             IntPtr ipBuffer = Marshal.AllocHGlobal(iSize);
@@ -205,7 +206,7 @@ namespace Win_1337_Patch
         }
 
         //API's
-        [DllImport("Imagehlp.dll", EntryPoint = "MapFileAndCheckSum", ExactSpelling = false, CharSet = CharSet.Auto, SetLastError = true)]
+        [DllImport("Imagehlp.dll", EntryPoint = "MapFileAndCheckSum", ExactSpelling = false, CharSet = CharSet.Unicode, SetLastError = true)]
         private static extern uint MapFileAndCheckSum(string Filename, out uint HeaderSum, out uint CheckSum);
     }
 }

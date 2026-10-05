@@ -18,7 +18,8 @@ namespace Win_1337_Patch
         public FileOwnershipService() : this(new OwnershipCommandRunner(),
             Environment.Is64BitOperatingSystem && !Environment.Is64BitProcess
                 ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Windows), "Sysnative")
-                : Environment.SystemDirectory) { }
+                : Environment.SystemDirectory)
+        { }
 
         public FileOwnershipService(IOwnershipCommandRunner runner, string systemDirectory)
         {

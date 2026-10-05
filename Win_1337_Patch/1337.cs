@@ -273,9 +273,9 @@ namespace Win_1337_Patch
             }
         }
 
-        private bool check_Symbol(string s)
+        private static bool check_Symbol(string s)
         {
-            if (!s.StartsWith(">"))
+            if (!s.StartsWith('>'))
             {
                 MessageBox.Show("The .1337 File is not valid...", "Info...", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return false;

@@ -33,8 +33,7 @@ namespace Win_1337_Patch
         public async Task<PatchOutcome> ApplyAsync(PatchRequest request, bool allowElevation, bool elevatedWorker,
             Func<PatchRequest, Task<bool>> confirmElevation = null)
         {
-            if (request == null)
-                throw new ArgumentNullException(nameof(request));
+            ArgumentNullException.ThrowIfNull(request);
             var result = await Task.Run(() => apply(request));
             if (result.Success || !result.CanRetryElevated || privileges.IsElevated || elevatedWorker)
                 return result;

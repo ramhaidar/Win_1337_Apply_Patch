@@ -42,8 +42,7 @@ namespace Win_1337_Patch
 
         public static string QuoteWindowsArgument(string value)
         {
-            if (value == null)
-                throw new ArgumentNullException(nameof(value));
+            ArgumentNullException.ThrowIfNull(value);
             var quoted = new StringBuilder("\"");
             int backslashes = 0;
             foreach (char character in value)

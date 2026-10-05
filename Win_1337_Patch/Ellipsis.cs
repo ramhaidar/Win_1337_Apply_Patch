@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Windows.Forms;
 using System.IO;
@@ -63,8 +63,7 @@ namespace Win_1337_Patch
             if (string.IsNullOrEmpty(text))
                 return text;
 
-            if (ctrl == null)
-                throw new ArgumentNullException("ctrl");
+            ArgumentNullException.ThrowIfNull(ctrl);
 
             using (Graphics dc = ctrl.CreateGraphics())
             {
@@ -129,7 +128,7 @@ namespace Win_1337_Patch
                     }
 
                     // build and measure a candidate string with ellipsis
-                    string tst = mid.Substring(0, left) + EllipsisChars + mid.Substring(right);
+                    string tst = string.Concat(mid.AsSpan(0, left), EllipsisChars, mid.AsSpan(right));
 
                     // restore path with <drive> and <filename>
                     if (isPath)

@@ -72,8 +72,7 @@ namespace Win_1337_Patch
         /// </summary>
         public static ScheduledPatchResult Schedule(PatchScheduleDescriptor descriptor, Action<string> log)
         {
-            if (descriptor == null)
-                throw new ArgumentNullException(nameof(descriptor));
+            ArgumentNullException.ThrowIfNull(descriptor);
 
             var patchPath = Path.GetFullPath(descriptor.PatchFilePath);
             var targetPath = Path.GetFullPath(descriptor.TargetFilePath);
@@ -124,7 +123,7 @@ namespace Win_1337_Patch
             builder.Append(QuoteArgument(executablePath));
             builder.Append(" -patch ");
             builder.Append(QuoteArgument(descriptor.PatchFilePath));
-            builder.Append(" ");
+            builder.Append(' ');
             builder.Append(QuoteArgument(descriptor.TargetFilePath));
 
             if (descriptor.FixFileOffset)
@@ -145,8 +144,7 @@ namespace Win_1337_Patch
 
         internal static string QuoteArgument(string value)
         {
-            if (value == null)
-                throw new ArgumentNullException(nameof(value));
+            ArgumentNullException.ThrowIfNull(value);
 
             return ElevatedPatchLauncher.QuoteWindowsArgument(value);
         }
